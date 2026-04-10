@@ -33,6 +33,7 @@
     <Resource Include="Fonts\segoeuisl.ttf" />
     <Resource Include="Fonts\consolab.ttf" />
     <Resource Include="Fonts\SegMDL2.ttf" />
+    <Resource Include="Assets\settings.svg" />
   </ItemGroup>
 
 </Project>

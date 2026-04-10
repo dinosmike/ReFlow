@@ -95,10 +95,18 @@
                             Style="{StaticResource Rf.Button}"
                             Padding="10,6"
                             Click="OpenSettings_OnClick">
-                        <TextBlock Text="&#xE713;"
-                                   FontFamily="pack://application:,,,/Fonts/#Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   VerticalAlignment="Center"/>
+                        <!-- Геометрия из Assets/settings.svg (viewBox 0 0 48 48), обводка белая -->
+                        <Viewbox Width="18"
+                                 Height="18"
+                                 Stretch="Uniform">
+                            <Path Fill="{x:Null}"
+                                  Stroke="White"
+                                  StrokeThickness="1.35"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  Data="M39.23 26a16.52 16.52 0 0 0 .14-2a16.52 16.52 0 0 0-.14-2l4.33-3.39a1 1 0 0 0 .25-1.31l-4.1-7.11a1 1 0 0 0-1.25-.44l-5.11 2.06a15.68 15.68 0 0 0-3.46-2l-.77-5.43a1 1 0 0 0-1-.86H19.9a1 1 0 0 0-1 .86l-.77 5.43a15.36 15.36 0 0 0-3.46 2L9.54 9.75a1 1 0 0 0-1.25.44l-4.1 7.11a1 1 0 0 0 .25 1.31L8.76 22a16.66 16.66 0 0 0-.14 2a16.52 16.52 0 0 0 .14 2l-4.32 3.39a1 1 0 0 0-.25 1.31l4.1 7.11a1 1 0 0 0 1.25.44l5.11-2.06a15.68 15.68 0 0 0 3.46 2l.77 5.43a1 1 0 0 0 1 .86h8.2a1 1 0 0 0 1-.86l.77-5.43a15.36 15.36 0 0 0 3.46-2l5.11 2.06a1 1 0 0 0 1.25-.44l4.1-7.11a1 1 0 0 0-.25-1.31ZM24 31.18A7.18 7.18 0 1 1 31.17 24A7.17 7.17 0 0 1 24 31.18Z"/>
+                        </Viewbox>
                     </Button>
 
                     <StackPanel Grid.Row="1"
@@ -106,8 +114,30 @@
                                 VerticalAlignment="Top"
                                 Width="380"
                                 Margin="0,4,0,0">
-                        <controls:SpeedRollingDigits x:Name="SpeedDial"
-                                                      HorizontalAlignment="Center"/>
+                        <!-- Габариты и CornerRadius как у SpeedRollingDigits: контур прогресса совпадает с рамкой циферблата. -->
+                        <Grid Width="278"
+                              Height="130"
+                              HorizontalAlignment="Center">
+                            <controls:SpeedRollingDigits x:Name="SpeedDial"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center"/>
+                            <Path x:Name="DialProgressOutline"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Width="278"
+                                  Height="130"
+                                  Stretch="None"
+                                  Stroke="#68e2cf"
+                                  StrokeThickness="2.5"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  Fill="{x:Null}"
+                                  Opacity="1"
+                                  SnapsToDevicePixels="True"
+                                  Visibility="Collapsed"
+                                  IsHitTestVisible="False"/>
+                        </Grid>
                         <TextBlock x:Name="SpeedStatsLine"
                                    FontSize="12"
                                    Foreground="{DynamicResource Rf.Text.Primary}"

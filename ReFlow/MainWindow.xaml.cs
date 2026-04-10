@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using WinFormsScreen = System.Windows.Forms.Screen;
 using MessageBox = System.Windows.MessageBox;
 using ReFlow.Models;
@@ -37,6 +38,184 @@ public partial class MainWindow : INotifyPropertyChanged
         return b;
     }
 
+    private void InitDialProgressOutline()
+    {
+        DialProgressOutline.Data = CreateSpeedDialOutlineGeometry();
+    }
+
+    /// <summary>Периметр скруглённого прямоугольника (fallback, если не удалось снять длину с геометрии).</summary>
+    private static double RoundedRectPerimeter(double w, double h, double r) =>
+        2 * (w - 2 * r) + 2 * (h - 2 * r) + 2 * Math.PI * r;
+
+    /// <summary>Длина контура после сглаживания дуг — совпадает с тем, как WPF считает штриховку.</summary>
+    private static double GetFlattenedOutlineLength(Geometry geometry)
+    {
+        var flat = geometry.GetFlattenedPathGeometry();
+        if (flat is not PathGeometry path)
+            return 0;
+
+        double len = 0;
+        foreach (PathFigure figure in path.Figures)
+        {
+            var current = figure.StartPoint;
+            foreach (PathSegment seg in figure.Segments)
+            {
+                if (seg is LineSegment ls)
+                {
+                    len += SegmentLength(current, ls.Point);
+                    current = ls.Point;
+                }
+                else if (seg is PolyLineSegment pls)
+                {
+                    foreach (var p in pls.Points)
+                    {
+                        len += SegmentLength(current, p);
+                        current = p;
+                    }
+                }
+            }
+
+            // Замыкание: в flattened-геометрии WPF часто уже есть отрезок к StartPoint — не дублировать.
+            if (figure.IsClosed)
+            {
+                var closeLen = SegmentLength(current, figure.StartPoint);
+                if (closeLen > 1e-3)
+                    len += closeLen;
+            }
+        }
+
+        return len;
+    }
+
+    private static double SegmentLength(System.Windows.Point a, System.Windows.Point b)
+    {
+        var dx = a.X - b.X;
+        var dy = a.Y - b.Y;
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    /// <summary>Контур как у рамки циферблата: старт в центре верхней стороны, обход по часовой стрелке.</summary>
+    private static PathGeometry CreateSpeedDialOutlineGeometry()
+    {
+        var w = DialOutlineWidth;
+        var h = DialOutlineHeight;
+        var r = DialCornerRadius;
+        var midX = w * 0.5;
+        var fig = new PathFigure
+        {
+            StartPoint = new System.Windows.Point(midX, 0),
+            IsClosed = true
+        };
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(w - r, 0), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(w, r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(w, h - r), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(w - r, h), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(r, h), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(0, h - r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(0, r), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(r, 0), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+
+        var geo = new PathGeometry();
+        geo.Figures.Add(fig);
+        geo.Freeze();
+        return geo;
+    }
+
+    private double _dialRingPathLength = 1;
+    private double _dialRingDurationSec = 1;
+    private DispatcherTimer? _dialRingSmoothTimer;
+    /// <summary>Старт отсчёта кольца: ровно столько секунд wall-clock, сколько задано длительностью (окно CancelAfter).</summary>
+    private DateTime? _dialRingWallStartUtc;
+
+    private void BeginDialProgressRing(TimeSpan totalDuration)
+    {
+        StopDialRingSmoothTimer();
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+
+        var data = DialProgressOutline.Data ?? CreateSpeedDialOutlineGeometry();
+        var len = GetFlattenedOutlineLength(data);
+        if (len <= 0)
+            len = RoundedRectPerimeter(DialOutlineWidth, DialOutlineHeight, DialCornerRadius);
+
+        _dialRingPathLength = len;
+        _dialRingDurationSec = Math.Max(totalDuration.TotalSeconds, 1e-3);
+        _dialRingWallStartUtc = null;
+
+        // [L,L] даёт период 2L по контуру — при сдвиге offset на L кольцо визуально замыкается при u≈0.5 (вдвое быстрее замера).
+        // Один штрих длиной len и огромный зазор: один «период» >> длины пути, линейное раскрытие по времени.
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { len, 100_000 };
+        DialProgressOutline.StrokeDashOffset = len;
+        DialProgressOutline.Visibility = Visibility.Visible;
+
+        StartDialRingSmoothTimer();
+    }
+
+    private void StartDialRingSmoothTimer()
+    {
+        StopDialRingSmoothTimer();
+        _dialRingSmoothTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _dialRingSmoothTimer.Tick += DialRingSmoothTimer_OnTick;
+        _dialRingSmoothTimer.Start();
+    }
+
+    private void StopDialRingSmoothTimer()
+    {
+        if (_dialRingSmoothTimer != null)
+        {
+            _dialRingSmoothTimer.Tick -= DialRingSmoothTimer_OnTick;
+            _dialRingSmoothTimer.Stop();
+            _dialRingSmoothTimer = null;
+        }
+    }
+
+    private void DialRingSmoothTimer_OnTick(object? sender, EventArgs e)
+    {
+        if (DialProgressOutline.Visibility != Visibility.Visible || !_dialRingWallStartUtc.HasValue)
+            return;
+
+        var est = DateTime.UtcNow - _dialRingWallStartUtc.Value;
+        if (est < TimeSpan.Zero)
+            est = TimeSpan.Zero;
+
+        var u = est.TotalSeconds / _dialRingDurationSec;
+        ApplyDialRingProgressU(u);
+    }
+
+    /// <summary>Старт отсчёта совпадает с началом замера в сервисе (до CancelAfter). Не использовать sw.Elapsed из Rate — после последнего Rate долго живёт WhenAll.</summary>
+    private void ArmDialRingWallClockStart()
+    {
+        if (DialProgressOutline.Visibility != Visibility.Visible)
+            return;
+        _dialRingWallStartUtc = DateTime.UtcNow;
+        ApplyDialRingProgressU(0);
+    }
+
+    private void ApplyDialRingProgressU(double u)
+    {
+        if (double.IsNaN(u) || double.IsInfinity(u))
+            return;
+
+        if (u >= 1.0)
+        {
+            DialProgressOutline.StrokeDashOffset = 0;
+            return;
+        }
+
+        u = Math.Clamp(u, 0, 1);
+        DialProgressOutline.StrokeDashOffset = _dialRingPathLength * (1.0 - u);
+    }
+
+    /// <summary>Останавливает анимацию по времени; контур остаётся на экране до следующего замера.</summary>
+    private void StopDialRingSmoothingAfterMeasure()
+    {
+        StopDialRingSmoothTimer();
+        _dialRingWallStartUtc = null;
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+    }
+
     private readonly SpeedTestService _speedTest = new(new System.Net.Http.HttpClient());
     private CancellationTokenSource? _speedTestCts;
 
@@ -58,6 +237,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     private readonly List<double> _graphSamples = new();
+    /// <summary>Все значения Мбит/с из прогресса замера — для средней как среднее арифметическое по тикам.</summary>
+    private readonly List<double> _sessionRateSamples = new();
     private double _graphSmoothedMbps;
     private bool _graphSmoothPrimed;
     /// <summary>Последнее значение на циферблате; -1 — после сброса, первый сэмпл без анимации.</summary>
@@ -81,6 +262,11 @@ public partial class MainWindow : INotifyPropertyChanged
     private const int TrayFlyDurationMs = 400;
     private const double TrayFlyEndScale = 0.14;
 
+    /// <summary>Совпадает с циферблатом <c>SpeedRollingDigits</c> (278×130, r=20).</summary>
+    private const double DialOutlineWidth = 278;
+    private const double DialOutlineHeight = 130;
+    private const double DialCornerRadius = 20;
+
     internal AppSettings SettingsModel => _settings;
 
     public MainWindow()
@@ -92,6 +278,7 @@ public partial class MainWindow : INotifyPropertyChanged
         ReloadFromStorage();
         MiniGraphFillPath.Fill = BrushFromHex(MiniGraphFillColorHex);
         ResetSessionSpeedStats();
+        InitDialProgressOutline();
         Loaded += MainWindow_OnLoaded;
         Closed += (_, _) => LocalizationService.LanguageChanged -= OnLocalizationLanguageChanged;
     }
@@ -109,11 +296,13 @@ public partial class MainWindow : INotifyPropertyChanged
         if (_speedTestCts != null)
         {
             try { _speedTestCts.Cancel(); } catch { /* ignore */ }
+            StopDialRingSmoothingAfterMeasure();
             CurrentMbps = 0;
             _lastDialSpeed = -1;
             SpeedDial.SetValueSilent(0);
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
+            _sessionRateSamples.Clear();
             _graphSmoothPrimed = false;
             ClearMiniGraphPaths();
             ResetSessionSpeedStats();
@@ -169,6 +358,7 @@ public partial class MainWindow : INotifyPropertyChanged
 
         StopMiniGraphFadeAndResetOpacity();
         _graphSamples.Clear();
+        _sessionRateSamples.Clear();
         _graphSmoothPrimed = false;
         ClearMiniGraphPaths();
         _lastDialSpeed = -1;
@@ -184,6 +374,7 @@ public partial class MainWindow : INotifyPropertyChanged
         try
         {
             var duration = TimeSpan.FromSeconds(Math.Clamp(s.SpeedTestDurationSeconds, 1, 600));
+            BeginDialProgressRing(duration);
             var dlBase = new Uri(fileUrlRaw, UriKind.Absolute);
             var options = new SpeedTestOptions
             {
@@ -206,7 +397,9 @@ public partial class MainWindow : INotifyPropertyChanged
             _lastDialSpeed = rFinal;
 
             _sessionAverageKnown = true;
-            _sessionAverageMbps = avg;
+            _sessionAverageMbps = _sessionRateSamples.Count > 0
+                ? _sessionRateSamples.Average()
+                : avg;
             UpdateSpeedStatsLine();
             SpeedDial.SetResultHighlight(true);
             BeginMiniGraphFadeOutAfterMeasurementComplete();
@@ -215,6 +408,7 @@ public partial class MainWindow : INotifyPropertyChanged
         {
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
+            _sessionRateSamples.Clear();
             _graphSmoothPrimed = false;
             ClearMiniGraphPaths();
             ResetSessionSpeedStats();
@@ -223,12 +417,14 @@ public partial class MainWindow : INotifyPropertyChanged
         {
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
+            _sessionRateSamples.Clear();
             _graphSmoothPrimed = false;
             ClearMiniGraphPaths();
             ResetSessionSpeedStats();
         }
         finally
         {
+            StopDialRingSmoothingAfterMeasure();
             _sessionMeasuring = false;
             _speedTestCts?.Dispose();
             _speedTestCts = null;
@@ -238,6 +434,9 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private void ApplySpeedProgress(SpeedTestProgress p)
     {
+        if (p.Kind == SpeedTestProgressKind.PhaseChanged && p.Elapsed == TimeSpan.Zero)
+            ArmDialRingWallClockStart();
+
         if (p.Kind == SpeedTestProgressKind.Rate && p.Mbps is double mbps)
         {
             var v = Math.Max(0, mbps);
@@ -251,6 +450,7 @@ public partial class MainWindow : INotifyPropertyChanged
             _lastDialSpeed = rounded;
 
             _sessionMaxMbps = Math.Max(_sessionMaxMbps, v);
+            _sessionRateSamples.Add(v);
             UpdateSpeedStatsLine();
 
             // Мягкая линия на графике: EMA по скорости.
@@ -490,6 +690,7 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         _sessionMeasuring = false;
         _sessionMaxMbps = 0;
+        _sessionRateSamples.Clear();
         _sessionAverageKnown = false;
         _sessionAverageMbps = 0;
         SpeedDial.SetResultHighlight(false);

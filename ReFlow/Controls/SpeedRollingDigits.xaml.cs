@@ -24,7 +24,7 @@ public partial class SpeedRollingDigits : System.Windows.Controls.UserControl
     private TranslateTransform[] _curTf = null!;
     private TranslateTransform[] _incTf = null!;
 
-    private static readonly SolidColorBrush ResultDigitForeground = CreateFrozenBrush("#44b759");
+    private static readonly SolidColorBrush ResultDigitForeground = CreateFrozenBrush("#68e2cf");
 
     private static SolidColorBrush CreateFrozenBrush(string hex)
     {
