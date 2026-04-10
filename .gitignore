@@ -1,0 +1,35 @@
+# Build
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+
+# Publish (build-release.bat → .\publish)
+publish/
+
+# MSBuild / VS / Rider
+.vs/
+*.user
+*.userosscache
+*.suo
+*.cache
+*.vsp
+*.vspx
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+**/packages/
+
+# Local speedtest payload (see generate-speedtest-file.bat)
+speedtest.bin
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini

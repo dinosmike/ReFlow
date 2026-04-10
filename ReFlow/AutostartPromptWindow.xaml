@@ -1,0 +1,89 @@
+<Window x:Class="ReFlow.AutostartPromptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="{DynamicResource Loc_Common_AppTitle}"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        Background="{DynamicResource Rf.Window.Background}"
+        ShowInTaskbar="False"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
+        MinWidth="400">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="44"
+                            ResizeBorderThickness="0"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Border BorderBrush="{DynamicResource Rf.Border}"
+            BorderThickness="1"
+            Background="{DynamicResource Rf.Window.Background}">
+        <DockPanel>
+            <Border DockPanel.Dock="Top"
+                    Height="44"
+                    Background="{DynamicResource Rf.Surface}"
+                    BorderBrush="{DynamicResource Rf.Border}"
+                    BorderThickness="0,0,0,1"
+                    shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <Border Background="Transparent"
+                        Padding="14,0,14,0"
+                        MouseLeftButtonDown="TitleBar_OnMouseDown">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_Common_AppTitle}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Margin="0,2,0,0"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource Rf.Text.Muted}"
+                                   Text="{DynamicResource Loc_MainWindow_Subtitle}"/>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <StackPanel Margin="24">
+                <TextBlock Text="{DynamicResource Loc_AutostartPrompt_Question}"
+                           TextWrapping="Wrap"
+                           FontSize="14"
+                           Foreground="{DynamicResource Rf.Text.Primary}"
+                           Margin="0,0,0,20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button MinWidth="88"
+                            Margin="0,0,10,0"
+                            Padding="14,8"
+                            HorizontalContentAlignment="Center"
+                            Style="{DynamicResource Rf.Button.Accent}"
+                            Click="Yes_OnClick">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Style="{DynamicResource Rf.TextBlock.ProfileActionIcon}"
+                                       FontSize="12"
+                                       Text="&#xE73E;"/>
+                            <TextBlock VerticalAlignment="Center"
+                                       Text="{DynamicResource Loc_AutostartPrompt_Yes}"
+                                       Foreground="{DynamicResource Rf.Accent}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button MinWidth="88"
+                            Padding="14,8"
+                            HorizontalContentAlignment="Center"
+                            Style="{DynamicResource Rf.Button}"
+                            Click="No_OnClick">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Style="{DynamicResource Rf.TextBlock.ProfileActionIcon}"
+                                       FontSize="12"
+                                       Text="&#xE711;"/>
+                            <TextBlock VerticalAlignment="Center"
+                                       Text="{DynamicResource Loc_AutostartPrompt_No}"
+                                       Foreground="{DynamicResource Rf.Text.Primary}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </DockPanel>
+    </Border>
+</Window>

@@ -1,0 +1,12 @@
+---
+description: After finishing work on ReFlow, run build-release.bat from repo root.
+alwaysApply: true
+---
+
+# Публикация после правок
+
+По завершении правок в этом репозитории (когда задача по коду закрыта) **самостоятельно** запускай из корня репозитория:
+
+`build-release.bat`
+
+Исполняй через оболочку (например `cmd /c "e:\Personal Mike\_My_programming\ReFlow\build-release.bat"` или эквивалент с актуальным путём). Не ограничивайся только `dotnet build`, если пользователь ожидает готовый single-file exe в `publish\`.
