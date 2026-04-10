@@ -120,11 +120,50 @@ public partial class MainWindow : INotifyPropertyChanged
             return;
         }
 
+        await TryStartSpeedTestAsync(showMissingUrlMessage: true);
+    }
+
+    private void TryInitialWindowOpenAutoMeasure()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsVisible)
+                return;
+            var s = SettingsStorage.Load();
+            if (s.MinimizeToTrayOnStartup)
+                return;
+            TryAutoStartMeasureWhenWindowShownCore();
+        }, DispatcherPriority.ApplicationIdle);
+    }
+
+    private void ScheduleAutoStartMeasureIfNeeded()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsVisible)
+                return;
+            TryAutoStartMeasureWhenWindowShownCore();
+        }, DispatcherPriority.ApplicationIdle);
+    }
+
+    private void TryAutoStartMeasureWhenWindowShownCore()
+    {
         var s = SettingsStorage.Load();
-        var fileUrlRaw = (s.SpeedTestFileUrl ?? string.Empty).Trim();
+        if (!s.SpeedTest.AutoStartWhenWindowOpen)
+            return;
+        if (_speedTestCts != null)
+            return;
+        _ = TryStartSpeedTestAsync(showMissingUrlMessage: false);
+    }
+
+    private async Task TryStartSpeedTestAsync(bool showMissingUrlMessage)
+    {
+        var s = SettingsStorage.Load();
+        var fileUrlRaw = SpeedTestConfig.DownloadFileUrl.Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
-            MessageBox.Show(LocalizationService.T("Tray.NoServerUrl"), LocalizationService.T("Common.AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (showMissingUrlMessage)
+                MessageBox.Show(LocalizationService.T("Tray.NoServerUrl"), LocalizationService.T("Common.AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -438,6 +477,7 @@ public partial class MainWindow : INotifyPropertyChanged
         ClampWindowToWorkArea();
         RedrawMiniGraph();
         UpdateSpeedStatsLine();
+        TryInitialWindowOpenAutoMeasure();
     }
 
     private void OnLocalizationLanguageChanged()
@@ -700,6 +740,7 @@ public partial class MainWindow : INotifyPropertyChanged
             Topmost = true;
             Topmost = false;
             Activate();
+            ScheduleAutoStartMeasureIfNeeded();
             return;
         }
 
@@ -769,6 +810,7 @@ public partial class MainWindow : INotifyPropertyChanged
             Topmost = true;
             Topmost = false;
             Activate();
+            ScheduleAutoStartMeasureIfNeeded();
         };
 
         sb.Begin(this, true);
@@ -781,6 +823,7 @@ public partial class MainWindow : INotifyPropertyChanged
         Topmost = true;
         Topmost = false;
         Activate();
+        ScheduleAutoStartMeasureIfNeeded();
     }
 
     private void GetFlyToTrayTarget(double origLeft, double origTop, out double endLeft, out double endTop)

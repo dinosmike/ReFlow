@@ -126,6 +126,7 @@ public partial class App : System.Windows.Application
             main.Hide();
 
         _tray = new TrayService(UiTheme.Dark);
+        _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
         LocalizationService.LanguageChanged += OnLocalizationLanguageChanged;
     }
 

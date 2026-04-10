@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:ReFlow"
         xmlns:controls="clr-namespace:ReFlow.Controls"
         Title="{DynamicResource Loc_Common_AppTitle}"
-        Width="620" MinWidth="620"
+        Width="480" MinWidth="450"
         SizeToContent="Height"
         WindowStartupLocation="Manual"
         WindowStyle="None"
@@ -80,7 +80,7 @@
                 </Grid>
             </Border>
 
-            <Grid Margin="24,24,24,50" ClipToBounds="False">
+            <Grid Margin="24,9,24,50" ClipToBounds="False">
                 <Grid Panel.ZIndex="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -94,8 +94,12 @@
                             VerticalAlignment="Top"
                             Style="{StaticResource Rf.Button}"
                             Padding="10,6"
-                            Click="OpenSettings_OnClick"
-                            Content="⚙"/>
+                            Click="OpenSettings_OnClick">
+                        <TextBlock Text="&#xE713;"
+                                   FontFamily="pack://application:,,,/Fonts/#Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   VerticalAlignment="Center"/>
+                    </Button>
 
                     <StackPanel Grid.Row="1"
                                 HorizontalAlignment="Center"

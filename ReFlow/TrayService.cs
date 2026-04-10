@@ -35,8 +35,8 @@ public sealed class TrayService : IDisposable
     /// <summary>UI для этого поколения уже финализирован (зелёный/восстановление) — игнорировать поздние Rate из очереди Dispatcher.</summary>
     private int _quickTestUiSealedGeneration;
 
-    /// <summary>Последний успешный средний результат (зелёный), держим до следующего клика / перезапуска.</summary>
-    private string? _lastQuickTestAvgText;
+    /// <summary>Последний успешный пик (макс. скорость по сэмплам, зелёный), держим до следующего клика / перезапуска.</summary>
+    private string? _lastQuickTestPeakText;
 
     public TrayService(UiTheme theme)
     {
@@ -149,27 +149,20 @@ public sealed class TrayService : IDisposable
 
     private void ExecuteTrayAction(bool isDouble)
     {
-        if (isDouble)
+        var pairing = SettingsStorage.Load().TrayClickPairing;
+        switch (pairing)
         {
-            // ReFlow: no double-click action for now.
-            return;
-        }
-
-        var action = SettingsStorage.Load().TraySingleClickAction ?? TrayIconClickAction.QuickTest;
-        switch (action)
-        {
-            case TrayIconClickAction.None:
+            case TrayClickPairing.WindowSingle_QuickTestDouble:
+                if (isDouble)
+                    StartQuickTest(restart: true);
+                else
+                    ShowMain();
                 break;
-            case TrayIconClickAction.OpenWindow:
-                ShowMain();
-                break;
-            case TrayIconClickAction.QuickTest:
-                StartQuickTest(restart: true);
-                break;
-            // Старые значения 2/3 в файле настроек — отдельных действий больше нет.
-            case TrayIconClickAction.ToggleResolution:
-            case TrayIconClickAction.ShowRandomAdvice:
-                StartQuickTest(restart: true);
+            default:
+                if (isDouble)
+                    ShowMain();
+                else
+                    StartQuickTest(restart: true);
                 break;
         }
     }
@@ -215,6 +208,14 @@ public sealed class TrayService : IDisposable
         Application.Current.Shutdown();
     }
 
+    /// <summary>Старт фонового замера при запуске в трее (если включено в настройках).</summary>
+    internal void TryAutoStartOnTrayLaunchIfNeeded(AppSettings settings)
+    {
+        if (!settings.MinimizeToTrayOnStartup || !settings.SpeedTest.AutoStartOnTrayStartup)
+            return;
+        StartQuickTest(restart: true);
+    }
+
     public void Dispose()
     {
         try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
@@ -238,7 +239,7 @@ public sealed class TrayService : IDisposable
             return;
 
         var settings = SettingsStorage.Load();
-        var fileUrlRaw = (settings.SpeedTestFileUrl ?? string.Empty).Trim();
+        var fileUrlRaw = SpeedTestConfig.DownloadFileUrl.Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
             _notifyIcon.ShowBalloonTip(2500, "ReFlow", LocalizationService.T("Tray.NoServerUrl"), ToolTipIcon.Warning);
@@ -274,9 +275,9 @@ public sealed class TrayService : IDisposable
                 {
                     if (gen != _quickTestGeneration)
                         return;
-                    var avg = samples.Count > 0 ? samples.Average() : result.Download.AverageMbps;
+                    var peakMbps = samples.Count > 0 ? samples.Max() : result.Download.AverageMbps;
                     _quickTestUiSealedGeneration = gen;
-                    ShowFinalAverage(avg);
+                    ShowFinalMaxMbps(peakMbps);
                 });
             }
             catch (OperationCanceledException)
@@ -334,17 +335,17 @@ public sealed class TrayService : IDisposable
         SetGlyph(text, Color.Red);
     }
 
-    private void ShowFinalAverage(double avgMbps)
+    private void ShowFinalMaxMbps(double maxMbps)
     {
-        var text = Math.Round(avgMbps).ToString("0");
-        _lastQuickTestAvgText = text;
+        var text = Math.Round(maxMbps).ToString("0");
+        _lastQuickTestPeakText = text;
         SetGlyph(text, Color.LimeGreen);
     }
 
     private void RestoreLastQuickTestGlyphOrBase()
     {
-        if (!string.IsNullOrEmpty(_lastQuickTestAvgText))
-            SetGlyph(_lastQuickTestAvgText, Color.LimeGreen);
+        if (!string.IsNullOrEmpty(_lastQuickTestPeakText))
+            SetGlyph(_lastQuickTestPeakText, Color.LimeGreen);
         else
             SetBaseIcon();
     }

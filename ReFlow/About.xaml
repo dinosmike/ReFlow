@@ -126,7 +126,7 @@
                                    Text="{DynamicResource Loc_About_VersionPrefix}"/>
                         <TextBlock FontSize="13"
                                    Foreground="{DynamicResource Rf.Text.Muted}"
-                                   Text=" 1.4"/>
+                                   Text=" 1.0"/>
                     </StackPanel>
 
                     <Grid Margin="0,14,0,0">

@@ -39,13 +39,34 @@ public partial class BandwidthMeter : System.Windows.Controls.UserControl
         SizeChanged += (_, _) => RefreshVisual();
     }
 
+    /// <summary>Совпадает с вычитанием в формуле центра маркера — заливка тянется ровно до центра кружка.</summary>
+    private const double MarkerTrackEndOffset = 3;
+
+    /// <summary>Доводка вправо: визуальный край градиента чуть впереди математического (обводка/сглаживание).</summary>
+    private const double FillExtendPastMarkerPx = 3;
+
     private void RefreshVisual()
     {
         var ratio = SpeedToVisualFillRatio(SpeedMbps);
-        FillScale.ScaleX = ratio <= 0 ? 0 : Math.Max(ratio, 0.004);
-
         var w = Math.Max(0, TrackInner.ActualWidth);
-        MarkerXform.X = w * ratio;
+        if (w <= 0)
+        {
+            FillScale.ScaleX = 0;
+            MarkerXform.X = 0;
+            return;
+        }
+
+        var span = Math.Max(0, w - 10);
+        var markerCenterX = 10 + span * ratio - MarkerTrackEndOffset;
+        MarkerXform.X = markerCenterX;
+
+        if (ratio <= 0)
+            FillScale.ScaleX = 0;
+        else
+        {
+            var fillEndX = markerCenterX + FillExtendPastMarkerPx;
+            FillScale.ScaleX = Math.Min(1, Math.Max(fillEndX / w, 0.004));
+        }
     }
 
     /// <summary>Доля ширины трека [0..1]: 8 сегментов одинаковой длины, границы по <see cref="ScaleKnotsMbps"/>.</summary>

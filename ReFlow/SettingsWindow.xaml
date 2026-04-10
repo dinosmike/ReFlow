@@ -55,6 +55,41 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Стрелки внутри общего поля с цифрой: без собственной рамки, только подсветка при наведении. -->
+        <Style x:Key="Rf.Settings.SpinnerRepeatInline" TargetType="RepeatButton">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Delay" Value="400"/>
+            <Setter Property="Interval" Value="75"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource Rf.Text.Primary}"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                Padding="1,0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.TitleBar.ButtonHoverBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.Button.PressedBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <!--
       Высота окна: SizeToContent=Height (по контенту, без полосы прокрутки).
@@ -145,37 +180,102 @@
                         </Grid>
                     </Border>
 
-                    <!-- SpeedTest -->
+                    <!-- Запуск и окно -->
                     <Border Style="{StaticResource Rf.Settings.Card}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}" Text="{DynamicResource Loc_SettingsWindow_SectionSpeedTest}"/>
-                            <TextBlock TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource Rf.Text.Muted}"
-                                       Margin="0,0,0,12"
-                                       Text="{DynamicResource Loc_SettingsWindow_SpeedTestHint}"/>
+                            <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}" Text="{DynamicResource Loc_SettingsWindow_SectionStartup}"/>
+                            <CheckBox x:Name="AutostartCheck"
+                                      Margin="0,0,0,4"
+                                      Content="{DynamicResource Loc_SettingsWindow_Autostart}"/>
+                            <CheckBox x:Name="StartupToTrayCheck"
+                                      Margin="0,4">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="{DynamicResource Loc_SettingsWindow_StartupToTray}"/>
+                            </CheckBox>
+                            <CheckBox x:Name="TrayHideAnimationCheck"
+                                      Margin="0,4">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="{DynamicResource Loc_SettingsWindow_TrayAnimation}"/>
+                            </CheckBox>
+                            <CheckBox x:Name="CloseToTrayCheck"
+                                      Margin="0,4">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="{DynamicResource Loc_SettingsWindow_CloseToTrayCross}"/>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
 
-                            <Label Content="{DynamicResource Loc_SettingsWindow_FileUrlLabel}" Target="{Binding ElementName=FileUrlBox}"/>
-                            <TextBox x:Name="FileUrlBox"
-                                     Margin="0,2,0,10"
-                                     ToolTip="{DynamicResource Loc_SettingsWindow_FileUrlTooltip}"/>
-
-                            <Grid>
+                    <!-- Авто-замер -->
+                    <Border Style="{StaticResource Rf.Settings.Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}" Text="{DynamicResource Loc_SettingsWindow_SectionAutoMeasure}"/>
+                            <CheckBox x:Name="AutoMeasureOnWindowOpenCheck"
+                                      Margin="0,0,0,8"
+                                      Content="{DynamicResource Loc_SettingsWindow_AutoMeasureOnWindowOpen}"/>
+                            <CheckBox x:Name="AutoMeasureTrayStartupCheck"
+                                      Margin="0,0,0,12"
+                                      Content="{DynamicResource Loc_SettingsWindow_AutoMeasureTrayStartup}"/>
+                            <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
                                            VerticalAlignment="Center"
+                                           TextWrapping="Wrap"
                                            Foreground="{DynamicResource Rf.Text.Primary}"
-                                           Text="{DynamicResource Loc_SettingsWindow_TestDurationLabel}"/>
-                                <TextBox x:Name="DurationSecondsBox"
-                                         Grid.Column="2"
-                                         VerticalAlignment="Center"
-                                         HorizontalContentAlignment="Center"
-                                         MaxLength="4"
-                                         ToolTip="{DynamicResource Loc_SettingsWindow_TestDurationTooltip}"/>
+                                           Text="{DynamicResource Loc_SettingsWindow_AutoMeasureDurationLabel}"/>
+                                <Border Grid.Column="1"
+                                        MinWidth="88"
+                                        Height="32"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource Rf.Surface}"
+                                        BorderBrush="{DynamicResource Rf.Border}"
+                                        BorderThickness="1"
+                                        SnapsToDevicePixels="True">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="22"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DurationSecondsBox"
+                                                 Grid.Column="0"
+                                                 BorderThickness="0"
+                                                 Background="Transparent"
+                                                 Padding="6,0,2,0"
+                                                 MinHeight="0"
+                                                 VerticalAlignment="Stretch"
+                                                 VerticalContentAlignment="Center"
+                                                 HorizontalContentAlignment="Center"
+                                                 MaxLength="4"
+                                                 ToolTip="{DynamicResource Loc_SettingsWindow_AutoMeasureDurationTooltip}"/>
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource Rf.Border}"
+                                                BorderThickness="1,0,0,0"
+                                                Margin="0,4,4,4">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="1"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+                                                <RepeatButton Grid.Row="0"
+                                                              Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                              Content="▲"
+                                                              Click="DurationUp_OnClick"/>
+                                                <Border Grid.Row="1"
+                                                        Background="{DynamicResource Rf.Border}"
+                                                        Height="1"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,-0.5,0,-0.5"/>
+                                                <RepeatButton Grid.Row="2"
+                                                              Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                              Content="▼"
+                                                              Click="DurationDown_OnClick"/>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </Border>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -184,27 +284,16 @@
                         <Border Style="{StaticResource Rf.Settings.Card}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}" Text="{DynamicResource Loc_SettingsWindow_SectionTray}"/>
-                                <TextBlock TextWrapping="Wrap"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource Rf.Text.Muted}"
-                                           Margin="0,0,0,12"
-                                           Text="{DynamicResource Loc_SettingsWindow_TrayHint}"/>
-                                <Label Content="{DynamicResource Loc_SettingsWindow_TraySingleClickLabel}"/>
                                 <StackPanel Margin="0,4,0,0">
-                                    <RadioButton x:Name="TraySingleOpenWindow"
+                                    <RadioButton x:Name="TrayPairOpenSingle"
                                                  Style="{StaticResource ThemeRadioStyle}"
-                                                 GroupName="TraySingle"
-                                                 Content="{DynamicResource Loc_SettingsWindow_TrayOpenWindow}"
+                                                 GroupName="TrayClickPair"
+                                                 Content="{DynamicResource Loc_SettingsWindow_TrayClickOpenSingleQuickDouble}"
                                                  Margin="0,0,0,8"/>
-                                    <RadioButton x:Name="TraySingleQuickTest"
+                                    <RadioButton x:Name="TrayPairQuickSingle"
                                                  Style="{StaticResource ThemeRadioStyle}"
-                                                 GroupName="TraySingle"
-                                                 Content="{DynamicResource Loc_SettingsWindow_TrayQuickTest}"
-                                                 Margin="0,0,0,8"/>
-                                    <RadioButton x:Name="TraySingleNone"
-                                                 Style="{StaticResource ThemeRadioStyle}"
-                                                 GroupName="TraySingle"
-                                                 Content="{DynamicResource Loc_SettingsWindow_TrayNone}"/>
+                                                 GroupName="TrayClickPair"
+                                                 Content="{DynamicResource Loc_SettingsWindow_TrayClickQuickSingleOpenDouble}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

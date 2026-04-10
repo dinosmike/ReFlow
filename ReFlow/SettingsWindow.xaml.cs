@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -95,39 +96,46 @@ public partial class SettingsWindow
         LanguageCombo.SelectedValue = _languageAtOpen;
         _languageComboLoading = false;
 
-        FileUrlBox.Text = settings.SpeedTestFileUrl ?? string.Empty;
-        DurationSecondsBox.Text = settings.SpeedTestDurationSeconds.ToString();
+        DurationSecondsBox.Text = settings.SpeedTestDurationSeconds.ToString(CultureInfo.InvariantCulture);
 
-        var action = settings.TraySingleClickAction ?? TrayIconClickAction.QuickTest;
-        switch (action)
-        {
-            case TrayIconClickAction.QuickTest:
-                TraySingleQuickTest.IsChecked = true;
-                break;
-            case TrayIconClickAction.None:
-                TraySingleNone.IsChecked = true;
-                break;
-            default:
-                TraySingleOpenWindow.IsChecked = true;
-                break;
-        }
+        AutostartCheck.IsChecked = settings.AutostartEnabled;
+        StartupToTrayCheck.IsChecked = settings.MinimizeToTrayOnStartup;
+        TrayHideAnimationCheck.IsChecked = settings.MinimizeToTrayAnimationEnabled;
+        CloseToTrayCheck.IsChecked = settings.MinimizeToTrayOnCloseClick;
+
+        AutoMeasureOnWindowOpenCheck.IsChecked = settings.SpeedTest.AutoStartWhenWindowOpen;
+        AutoMeasureTrayStartupCheck.IsChecked = settings.SpeedTest.AutoStartOnTrayStartup;
+
+        if (settings.TrayClickPairing == TrayClickPairing.WindowSingle_QuickTestDouble)
+            TrayPairOpenSingle.IsChecked = true;
+        else
+            TrayPairQuickSingle.IsChecked = true;
     }
 
     private void Save_OnClick(object sender, RoutedEventArgs e)
     {
-        if (TraySingleQuickTest.IsChecked == true)
-            _settings.TraySingleClickAction = TrayIconClickAction.QuickTest;
-        else if (TraySingleNone.IsChecked == true)
-            _settings.TraySingleClickAction = TrayIconClickAction.None;
-        else
-            _settings.TraySingleClickAction = TrayIconClickAction.OpenWindow;
+        _settings.TrayClickPairing = TrayPairOpenSingle.IsChecked == true
+            ? TrayClickPairing.WindowSingle_QuickTestDouble
+            : TrayClickPairing.QuickTestSingle_WindowDouble;
+        _settings.TraySingleClickAction = _settings.TrayClickPairing == TrayClickPairing.WindowSingle_QuickTestDouble
+            ? TrayIconClickAction.OpenWindow
+            : TrayIconClickAction.QuickTest;
 
-        _settings.SpeedTestFileUrl = FileUrlBox.Text.Trim();
-        if (!int.TryParse(DurationSecondsBox.Text.Trim(), out var sec) || sec < 1)
+        if (!int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var sec) || sec < 1)
             sec = 15;
         if (sec > 600)
             sec = 600;
         _settings.SpeedTestDurationSeconds = sec;
+
+        _settings.AutostartEnabled = AutostartCheck.IsChecked == true;
+        _settings.MinimizeToTrayOnStartup = StartupToTrayCheck.IsChecked == true;
+        _settings.MinimizeToTrayAnimationEnabled = TrayHideAnimationCheck.IsChecked == true;
+        _settings.MinimizeToTrayOnCloseClick = CloseToTrayCheck.IsChecked == true;
+
+        _settings.SpeedTest.AutoStartWhenWindowOpen = AutoMeasureOnWindowOpenCheck.IsChecked == true;
+        _settings.SpeedTest.AutoStartOnTrayStartup = AutoMeasureTrayStartupCheck.IsChecked == true;
+
+        AutostartService.SetEnabled(_settings.AutostartEnabled);
 
         _settings.UiLanguage = AppLanguageCatalog.Normalize(LanguageCombo.SelectedValue as string ?? _settings.UiLanguage);
 
@@ -177,5 +185,17 @@ public partial class SettingsWindow
     {
         e.Handled = true;
         About.Show(this);
+    }
+
+    private void DurationUp_OnClick(object sender, RoutedEventArgs e) => BumpDurationSeconds(1);
+
+    private void DurationDown_OnClick(object sender, RoutedEventArgs e) => BumpDurationSeconds(-1);
+
+    private void BumpDurationSeconds(int delta)
+    {
+        if (!int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+            v = 15;
+        v = Math.Clamp(v + delta, 1, 600);
+        DurationSecondsBox.Text = v.ToString(CultureInfo.InvariantCulture);
     }
 }

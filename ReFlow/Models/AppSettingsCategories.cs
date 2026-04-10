@@ -17,7 +17,12 @@ public sealed class StartupWindowSettings
 /// <summary>Меню иконки в трее.</summary>
 public sealed class TrayMenuSettings
 {
+    /// <summary>Устаревшее поле JSON; при сохранении синхронизируется с <see cref="ClickPairing"/>.</summary>
     public TrayIconClickAction? SingleClickAction { get; set; }
+
+    /// <summary>Как сочетаются одинарный и двойной клик (замер / окно).</summary>
+    [JsonPropertyName("clickPairing")]
+    public TrayClickPairing ClickPairing { get; set; } = TrayClickPairing.WindowSingle_QuickTestDouble;
 }
 
 /// <summary>Тема и язык интерфейса.</summary>
@@ -30,6 +35,6 @@ public sealed class UiAppearanceSettings
 /// <summary>Служебные поля файла настроек.</summary>
 public sealed class SettingsMeta
 {
-    /// <summary>7 — ReFlow без профилей дисплея и советов.</summary>
+    /// <summary>9 — tray clickPairing (одинарный/двойной клик).</summary>
     public int SettingsFormatVersion { get; set; }
 }

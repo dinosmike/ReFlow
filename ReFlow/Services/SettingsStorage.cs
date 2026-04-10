@@ -362,8 +362,25 @@ public static class SettingsStorage
         if (s.SettingsFormatVersion < 7)
             s.SettingsFormatVersion = 7;
 
-        if (s.Tray.SingleClickAction is TrayIconClickAction.ToggleResolution
-            or TrayIconClickAction.ShowRandomAdvice)
-            s.Tray.SingleClickAction = TrayIconClickAction.QuickTest;
+        if (s.SettingsFormatVersion < 8)
+        {
+            // В JSON до v8 полей не было: десериализатор даёт false для обоих — задаём осмысленные умолчания.
+            s.SpeedTest.AutoStartWhenWindowOpen = false;
+            s.SpeedTest.AutoStartOnTrayStartup = true;
+            s.SettingsFormatVersion = 8;
+        }
+
+        if (s.SettingsFormatVersion < 9)
+        {
+            if (s.Tray.SingleClickAction == TrayIconClickAction.OpenWindow)
+                s.Tray.ClickPairing = TrayClickPairing.WindowSingle_QuickTestDouble;
+            else
+                s.Tray.ClickPairing = TrayClickPairing.QuickTestSingle_WindowDouble;
+            s.SettingsFormatVersion = 9;
+        }
+
+        s.Tray.SingleClickAction = s.Tray.ClickPairing == TrayClickPairing.WindowSingle_QuickTestDouble
+            ? TrayIconClickAction.OpenWindow
+            : TrayIconClickAction.QuickTest;
     }
 }

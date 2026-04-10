@@ -62,6 +62,13 @@ public sealed class AppSettings
     }
 
     [JsonIgnore]
+    public TrayClickPairing TrayClickPairing
+    {
+        get => Tray.ClickPairing;
+        set => Tray.ClickPairing = value;
+    }
+
+    [JsonIgnore]
     public UiTheme UiTheme
     {
         get => Ui.Theme;
@@ -90,13 +97,6 @@ public sealed class AppSettings
     }
 
     [JsonIgnore]
-    public string? SpeedTestFileUrl
-    {
-        get => SpeedTest.FileUrl;
-        set => SpeedTest.FileUrl = value;
-    }
-
-    [JsonIgnore]
     public int SpeedTestDurationSeconds
     {
         get => SpeedTest.DurationSeconds;
@@ -114,14 +114,23 @@ public sealed class AppSettings
                 MinimizeToTrayOnStartup = false,
                 MinimizeToTrayAnimationEnabled = true
             },
-            Tray = new TrayMenuSettings { SingleClickAction = TrayIconClickAction.QuickTest },
+            Tray = new TrayMenuSettings
+            {
+                ClickPairing = TrayClickPairing.WindowSingle_QuickTestDouble,
+                SingleClickAction = TrayIconClickAction.OpenWindow
+            },
             Ui = new UiAppearanceSettings
             {
                 Theme = UiTheme.Dark,
                 Language = AppLanguageCatalog.ResolveDefaultLanguage()
             },
-            Meta = new SettingsMeta { SettingsFormatVersion = 7 },
-            SpeedTest = new SpeedTestSettings { FileUrl = null, DurationSeconds = 15 }
+            Meta = new SettingsMeta { SettingsFormatVersion = 9 },
+            SpeedTest = new SpeedTestSettings
+            {
+                DurationSeconds = 15,
+                AutoStartWhenWindowOpen = false,
+                AutoStartOnTrayStartup = true
+            }
         };
     }
 
@@ -136,9 +145,15 @@ public sealed class AppSettings
                 MinimizeToTrayOnStartup = src.MinimizeToTrayOnStartup,
                 MinimizeToTrayAnimationEnabled = src.MinimizeToTrayAnimationEnabled
             },
-            Tray = new TrayMenuSettings { SingleClickAction = src.TraySingleClickAction },
+            Tray = new TrayMenuSettings
+            {
+                SingleClickAction = src.TraySingleClickAction,
+                ClickPairing = src.TraySingleClickAction == TrayIconClickAction.OpenWindow
+                    ? TrayClickPairing.WindowSingle_QuickTestDouble
+                    : TrayClickPairing.QuickTestSingle_WindowDouble
+            },
             Ui = new UiAppearanceSettings { Theme = src.UiTheme, Language = src.UiLanguage },
-            Meta = new SettingsMeta { SettingsFormatVersion = Math.Max(src.SettingsFormatVersion, 7) },
+            Meta = new SettingsMeta { SettingsFormatVersion = Math.Max(src.SettingsFormatVersion, 9) },
             SpeedTest = new SpeedTestSettings()
         };
     }
