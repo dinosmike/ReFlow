@@ -354,6 +354,8 @@
         <Setter Property="Padding" Value="16,8"/>
         <Setter Property="MinHeight" Value="36"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <!-- Иначе при отпускании мыши на кадр рисуется стандартный прямоугольник фокуса (за скруглением Border). -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
