@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -47,54 +49,7 @@ public partial class MainWindow : INotifyPropertyChanged
     private static double RoundedRectPerimeter(double w, double h, double r) =>
         2 * (w - 2 * r) + 2 * (h - 2 * r) + 2 * Math.PI * r;
 
-    /// <summary>Длина контура после сглаживания дуг — совпадает с тем, как WPF считает штриховку.</summary>
-    private static double GetFlattenedOutlineLength(Geometry geometry)
-    {
-        var flat = geometry.GetFlattenedPathGeometry();
-        if (flat is not PathGeometry path)
-            return 0;
-
-        double len = 0;
-        foreach (PathFigure figure in path.Figures)
-        {
-            var current = figure.StartPoint;
-            foreach (PathSegment seg in figure.Segments)
-            {
-                if (seg is LineSegment ls)
-                {
-                    len += SegmentLength(current, ls.Point);
-                    current = ls.Point;
-                }
-                else if (seg is PolyLineSegment pls)
-                {
-                    foreach (var p in pls.Points)
-                    {
-                        len += SegmentLength(current, p);
-                        current = p;
-                    }
-                }
-            }
-
-            // Замыкание: в flattened-геометрии WPF часто уже есть отрезок к StartPoint — не дублировать.
-            if (figure.IsClosed)
-            {
-                var closeLen = SegmentLength(current, figure.StartPoint);
-                if (closeLen > 1e-3)
-                    len += closeLen;
-            }
-        }
-
-        return len;
-    }
-
-    private static double SegmentLength(System.Windows.Point a, System.Windows.Point b)
-    {
-        var dx = a.X - b.X;
-        var dy = a.Y - b.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
-    }
-
-    /// <summary>Контур как у рамки циферблата: старт в центре верхней стороны, обход по часовой стрелке.</summary>
+    /// <summary>Контур как у рамки циферблата: старт в центре верхней стороны, обход по часовой. Без <c>IsClosed</c> — иначе WPF даёт нелинейную штриховку (~круг за ~⅓ времени).</summary>
     private static PathGeometry CreateSpeedDialOutlineGeometry()
     {
         var w = DialOutlineWidth;
@@ -104,7 +59,7 @@ public partial class MainWindow : INotifyPropertyChanged
         var fig = new PathFigure
         {
             StartPoint = new System.Windows.Point(midX, 0),
-            IsClosed = true
+            IsClosed = false
         };
         fig.Segments.Add(new LineSegment(new System.Windows.Point(w - r, 0), true));
         fig.Segments.Add(new ArcSegment(new System.Windows.Point(w, r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
@@ -114,6 +69,7 @@ public partial class MainWindow : INotifyPropertyChanged
         fig.Segments.Add(new ArcSegment(new System.Windows.Point(0, h - r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
         fig.Segments.Add(new LineSegment(new System.Windows.Point(0, r), true));
         fig.Segments.Add(new ArcSegment(new System.Windows.Point(r, 0), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, 0), true));
 
         var geo = new PathGeometry();
         geo.Figures.Add(fig);
@@ -121,99 +77,151 @@ public partial class MainWindow : INotifyPropertyChanged
         return geo;
     }
 
+    /// <summary>Длина обводки в тех же единицах, что <see cref="Shape.StrokeDashOffset"/> (flatten WPF, не аналитика).</summary>
+    private static double MeasureFlattenedPathLength(PathGeometry geometry)
+    {
+        try
+        {
+            var flat = geometry.GetFlattenedPathGeometry(0.25, ToleranceType.Absolute);
+            double len = 0;
+            foreach (PathFigure fig in flat.Figures)
+            {
+                var cur = fig.StartPoint;
+                var start = cur;
+                foreach (PathSegment seg in fig.Segments)
+                {
+                    switch (seg)
+                    {
+                        case LineSegment ls:
+                        {
+                            var next = ls.Point;
+                            len += SegmentLen(cur, next);
+                            cur = next;
+                            break;
+                        }
+                        case PolyLineSegment poly:
+                        {
+                            foreach (System.Windows.Point pt in poly.Points)
+                            {
+                                len += SegmentLen(cur, pt);
+                                cur = pt;
+                            }
+                            break;
+                        }
+                        default:
+                            return 0;
+                    }
+                }
+                if (fig.IsClosed)
+                    len += SegmentLen(cur, start);
+            }
+            return len > double.Epsilon ? len : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+
+        static double SegmentLen(System.Windows.Point a, System.Windows.Point b)
+        {
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
+    }
+
+    /// <summary>Flatten иногда даёт длину в разы больше аналитики — тогда штрих «догоняет» время визуально раньше.</summary>
+    private static double CoerceOutlineStrokeLength(PathGeometry geo, double analytical)
+    {
+        var m = MeasureFlattenedPathLength(geo);
+        if (m <= double.Epsilon)
+            return analytical;
+        var ratio = m / analytical;
+        return ratio is >= 0.82 and <= 1.18 ? m : analytical;
+    }
+
     private double _dialRingPathLength = 1;
-    private double _dialRingDurationSec = 1;
-    private DispatcherTimer? _dialRingSmoothTimer;
-    /// <summary>Старт отсчёта кольца: ровно столько секунд wall-clock, сколько задано длительностью (окно CancelAfter).</summary>
-    private DateTime? _dialRingWallStartUtc;
+    private TimeSpan _dialRingDuration;
+    private DispatcherTimer? _dialRingUiTimer;
+    private Stopwatch? _dialRingUiSw;
 
     private void BeginDialProgressRing(TimeSpan totalDuration)
     {
-        StopDialRingSmoothTimer();
+        StopDialRingUiTimer();
+
+        _dialRingDuration = totalDuration <= TimeSpan.Zero ? TimeSpan.FromSeconds(1) : totalDuration;
+
+        var geo = DialProgressOutline.Data as PathGeometry ?? CreateSpeedDialOutlineGeometry();
+        if (DialProgressOutline.Data is not PathGeometry)
+            DialProgressOutline.Data = geo;
+
+        var analytical = RoundedRectPerimeter(DialOutlineWidth, DialOutlineHeight, DialCornerRadius);
+        _dialRingPathLength = CoerceOutlineStrokeLength(geo, analytical);
+
+        // Прогресс — длина первого штриха [0..len], offset=0: доля времени линейна по длине нарисованного контура.
+        // Сдвиг offset при штрихе ≈ периметра на замкнутом Path даёт преждевременное визуальное замыкание.
         DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
-
-        var data = DialProgressOutline.Data ?? CreateSpeedDialOutlineGeometry();
-        var len = GetFlattenedOutlineLength(data);
-        if (len <= 0)
-            len = RoundedRectPerimeter(DialOutlineWidth, DialOutlineHeight, DialCornerRadius);
-
-        _dialRingPathLength = len;
-        _dialRingDurationSec = Math.Max(totalDuration.TotalSeconds, 1e-3);
-        _dialRingWallStartUtc = null;
-
-        // [L,L] даёт период 2L по контуру — при сдвиге offset на L кольцо визуально замыкается при u≈0.5 (вдвое быстрее замера).
-        // Один штрих длиной len и огромный зазор: один «период» >> длины пути, линейное раскрытие по времени.
-        DialProgressOutline.StrokeDashArray = new DoubleCollection { len, 100_000 };
-        DialProgressOutline.StrokeDashOffset = len;
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
+        DialProgressOutline.StrokeDashOffset = 0;
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
         DialProgressOutline.Visibility = Visibility.Visible;
 
-        StartDialRingSmoothTimer();
+        // Время кольца — только UI Stopwatch + DispatcherTimer (не прогресс замера), чтобы исключить рассинхрон ×N.
+        _dialRingUiSw = Stopwatch.StartNew();
+        _dialRingUiTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(50) };
+        _dialRingUiTimer.Tick += OnDialRingUiTick;
+        _dialRingUiTimer.Start();
     }
 
-    private void StartDialRingSmoothTimer()
+    private void OnDialRingUiTick(object? sender, EventArgs e)
     {
-        StopDialRingSmoothTimer();
-        _dialRingSmoothTimer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-        _dialRingSmoothTimer.Tick += DialRingSmoothTimer_OnTick;
-        _dialRingSmoothTimer.Start();
-    }
-
-    private void StopDialRingSmoothTimer()
-    {
-        if (_dialRingSmoothTimer != null)
-        {
-            _dialRingSmoothTimer.Tick -= DialRingSmoothTimer_OnTick;
-            _dialRingSmoothTimer.Stop();
-            _dialRingSmoothTimer = null;
-        }
-    }
-
-    private void DialRingSmoothTimer_OnTick(object? sender, EventArgs e)
-    {
-        if (DialProgressOutline.Visibility != Visibility.Visible || !_dialRingWallStartUtc.HasValue)
+        if (_dialRingUiSw is null || DialProgressOutline.Visibility != Visibility.Visible)
             return;
-
-        var est = DateTime.UtcNow - _dialRingWallStartUtc.Value;
-        if (est < TimeSpan.Zero)
-            est = TimeSpan.Zero;
-
-        var u = est.TotalSeconds / _dialRingDurationSec;
-        ApplyDialRingProgressU(u);
+        UpdateDialProgressRingFromElapsed(_dialRingUiSw.Elapsed, _dialRingDuration);
     }
 
-    /// <summary>Старт отсчёта совпадает с началом замера в сервисе (до CancelAfter). Не использовать sw.Elapsed из Rate — после последнего Rate долго живёт WhenAll.</summary>
-    private void ArmDialRingWallClockStart()
+    private void StopDialRingUiTimer()
+    {
+        if (_dialRingUiTimer != null)
+        {
+            _dialRingUiTimer.Tick -= OnDialRingUiTick;
+            _dialRingUiTimer.Stop();
+            _dialRingUiTimer = null;
+        }
+        _dialRingUiSw = null;
+    }
+
+    /// <summary>Доля контура по прошедшему времени; для замера кольцо обновляет <see cref="OnDialRingUiTick"/>.</summary>
+    private void UpdateDialProgressRingFromElapsed(TimeSpan elapsed, TimeSpan? plannedTotal = null, bool forceFull = false)
     {
         if (DialProgressOutline.Visibility != Visibility.Visible)
             return;
-        _dialRingWallStartUtc = DateTime.UtcNow;
-        ApplyDialRingProgressU(0);
-    }
-
-    private void ApplyDialRingProgressU(double u)
-    {
-        if (double.IsNaN(u) || double.IsInfinity(u))
+        var denom = plannedTotal ?? _dialRingDuration;
+        if (denom <= TimeSpan.Zero || _dialRingPathLength <= 0)
             return;
-
-        if (u >= 1.0)
-        {
-            DialProgressOutline.StrokeDashOffset = 0;
-            return;
-        }
-
-        u = Math.Clamp(u, 0, 1);
-        DialProgressOutline.StrokeDashOffset = _dialRingPathLength * (1.0 - u);
+        var t = forceFull
+            ? 1.0
+            : Math.Clamp(elapsed.Ticks / ((double)denom.Ticks * DialRingProgressSlowdown), 0, 1);
+        var lit = Math.Clamp(_dialRingPathLength * t, 0, _dialRingPathLength);
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
+        DialProgressOutline.StrokeDashOffset = 0;
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { lit, 1_000_000 };
     }
 
     /// <summary>Останавливает анимацию по времени; контур остаётся на экране до следующего замера.</summary>
     private void StopDialRingSmoothingAfterMeasure()
     {
-        StopDialRingSmoothTimer();
-        _dialRingWallStartUtc = null;
+        StopDialRingUiTimer();
+
+        var holdOffset = (double)DialProgressOutline.GetValue(Shape.StrokeDashOffsetProperty);
+        var holdDash = DialProgressOutline.StrokeDashArray != null
+            ? new DoubleCollection(DialProgressOutline.StrokeDashArray)
+            : new DoubleCollection { 0, 1_000_000 };
         DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
+        DialProgressOutline.StrokeDashOffset = holdOffset;
+        DialProgressOutline.StrokeDashArray = holdDash;
     }
 
     private readonly SpeedTestService _speedTest = new(new System.Net.Http.HttpClient());
@@ -266,6 +274,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private const double DialOutlineWidth = 278;
     private const double DialOutlineHeight = 130;
     private const double DialCornerRadius = 20;
+    /// <summary>Визуальное заполнение контура в <c>N</c> раз медленнее, чем длительность замера по таймеру.</summary>
+    private const double DialRingProgressSlowdown = 2.5;
 
     internal AppSettings SettingsModel => _settings;
 
@@ -403,6 +413,7 @@ public partial class MainWindow : INotifyPropertyChanged
             UpdateSpeedStatsLine();
             SpeedDial.SetResultHighlight(true);
             BeginMiniGraphFadeOutAfterMeasurementComplete();
+            UpdateDialProgressRingFromElapsed(duration, duration, forceFull: true);
         }
         catch (OperationCanceledException)
         {
@@ -434,9 +445,6 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private void ApplySpeedProgress(SpeedTestProgress p)
     {
-        if (p.Kind == SpeedTestProgressKind.PhaseChanged && p.Elapsed == TimeSpan.Zero)
-            ArmDialRingWallClockStart();
-
         if (p.Kind == SpeedTestProgressKind.Rate && p.Mbps is double mbps)
         {
             var v = Math.Max(0, mbps);

@@ -383,6 +383,18 @@
         </Setter>
     </Style>
 
+    <!-- Кнопка-иконка: без наведения не видно рамки и фона; при hover — как Rf.Button. -->
+    <Style x:Key="Rf.Button.SettingsGhost" TargetType="Button" BasedOn="{StaticResource Rf.Button}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Rf.Surface}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Rf.Border}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="Rf.Button.Accent" TargetType="Button" BasedOn="{StaticResource Rf.Button}">
         <Setter Property="Background" Value="{DynamicResource Rf.Button.Accent.Background}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Rf.Accent.Dim}"/>
@@ -412,6 +424,49 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.TitleBar.ButtonPressedBackground}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Настройки в заголовке: в покое без рамки и фона; при наведении — как Rf.Button.Accent (Старт). -->
+    <Style x:Key="Rf.TitleBar.Settings" TargetType="Button">
+        <Setter Property="Width" Value="38"/>
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Rf.Text.Primary}"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontFamily" Value="pack://application:,,,/Fonts/#Segoe UI"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.Button.Accent.Background}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Rf.Accent}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Rf.Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.Button.PressedBackground}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Rf.Accent}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Rf.Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

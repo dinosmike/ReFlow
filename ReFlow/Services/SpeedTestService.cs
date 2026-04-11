@@ -34,7 +34,7 @@ public sealed class SpeedTestService
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(options.Duration);
         // UI (кольцо) стартует вместе с окном длительности, а не на доли мс раньше CancelAfter.
-        progress?.Report(SpeedTestProgress.PhaseChanged(SpeedTestPhase.Download));
+        progress?.Report(SpeedTestProgress.PhaseChanged(SpeedTestPhase.Download, options.Duration));
 
         var tasks = new List<Task>(capacity: options.ParallelStreams);
         for (var i = 0; i < options.ParallelStreams; i++)
@@ -77,7 +77,8 @@ public sealed class SpeedTestService
             progress?.Report(SpeedTestProgress.Rate(
                 SpeedTestPhase.Download,
                 BytesToMbps(Interlocked.Read(ref totalBytes), sw.Elapsed),
-                sw.Elapsed));
+                sw.Elapsed,
+                options.Duration));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -86,7 +87,7 @@ public sealed class SpeedTestService
 
         var elapsed = sw.Elapsed;
         var avgMbps = BytesToMbps(Interlocked.Read(ref totalBytes), elapsed);
-        progress?.Report(SpeedTestProgress.Completed(SpeedTestPhase.Download, avgMbps, elapsed));
+        progress?.Report(SpeedTestProgress.Completed(SpeedTestPhase.Download, avgMbps, elapsed, options.Duration));
         return new SpeedTestMetric(avgMbps, elapsed);
     }
 
@@ -109,17 +110,23 @@ public enum SpeedTestPhase
     Download
 }
 
-public sealed record SpeedTestProgress(SpeedTestPhase Phase, SpeedTestProgressKind Kind, double? Mbps, TimeSpan? Elapsed = null)
+public sealed record SpeedTestProgress(
+    SpeedTestPhase Phase,
+    SpeedTestProgressKind Kind,
+    double? Mbps,
+    TimeSpan? Elapsed = null,
+    /// <summary>Та же длительность, что у <c>CancelAfter</c> — знаменатель прогресса кольца в UI.</summary>
+    TimeSpan? PlannedDuration = null)
 {
     /// <summary><see cref="Elapsed"/> = 0 — синхрон старта UI с секундомером замера.</summary>
-    public static SpeedTestProgress PhaseChanged(SpeedTestPhase phase) =>
-        new(phase, SpeedTestProgressKind.PhaseChanged, null, TimeSpan.Zero);
+    public static SpeedTestProgress PhaseChanged(SpeedTestPhase phase, TimeSpan plannedDuration) =>
+        new(phase, SpeedTestProgressKind.PhaseChanged, null, TimeSpan.Zero, plannedDuration);
 
-    public static SpeedTestProgress Rate(SpeedTestPhase phase, double mbps, TimeSpan elapsed) =>
-        new(phase, SpeedTestProgressKind.Rate, mbps, elapsed);
+    public static SpeedTestProgress Rate(SpeedTestPhase phase, double mbps, TimeSpan elapsed, TimeSpan plannedDuration) =>
+        new(phase, SpeedTestProgressKind.Rate, mbps, elapsed, plannedDuration);
 
-    public static SpeedTestProgress Completed(SpeedTestPhase phase, double avgMbps, TimeSpan elapsed) =>
-        new(phase, SpeedTestProgressKind.Completed, avgMbps, elapsed);
+    public static SpeedTestProgress Completed(SpeedTestPhase phase, double avgMbps, TimeSpan elapsed, TimeSpan plannedDuration) =>
+        new(phase, SpeedTestProgressKind.Completed, avgMbps, elapsed, plannedDuration);
 }
 
 public enum SpeedTestProgressKind
