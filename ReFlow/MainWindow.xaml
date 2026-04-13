@@ -129,7 +129,7 @@
                                   StrokeEndLineCap="Round"
                                   Fill="{x:Null}"
                                   Opacity="1"
-                                  SnapsToDevicePixels="True"
+                                  SnapsToDevicePixels="False"
                                   Visibility="Collapsed"
                                   IsHitTestVisible="False"/>
                         </Grid>

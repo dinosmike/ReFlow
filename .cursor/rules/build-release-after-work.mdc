@@ -15,6 +15,7 @@ cmd /c "build-release.bat nopause"
 ```
 
 - **`nopause`** — не зависать на `pause` при ошибке (нужно для автоматического запуска).
-- **`nostart`** — не запускать exe после сборки (например только проверка publish): `build-release.bat nopause nostart`.
+- **Без второго аргумента** — после успешного publish батник **запускает** `publish\ReFlow.exe` (так и нужно по умолчанию).
+- **`nostart`** — только если пользователь **явно** попросил не стартовать exe после сборки.
 
-Не ограничивайся только `dotnet build`, если ожидается single-file в `publish\`. Батник делает `dotnet publish` (win-x64, single file) и при необходимости стартует приложение.
+Не ограничивайся только `dotnet build`, если ожидается single-file в `publish\`. Батник делает `dotnet publish` (win-x64, single file) и стартует приложение.

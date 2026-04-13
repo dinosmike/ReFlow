@@ -49,27 +49,37 @@ public partial class MainWindow : INotifyPropertyChanged
     private static double RoundedRectPerimeter(double w, double h, double r) =>
         2 * (w - 2 * r) + 2 * (h - 2 * r) + 2 * Math.PI * r;
 
-    /// <summary>Контур как у рамки циферблата: старт в центре верхней стороны, обход по часовой. Без <c>IsClosed</c> — иначе WPF даёт нелинейную штриховку (~круг за ~⅓ времени).</summary>
+    /// <summary>
+    /// Внутрь от внешней границы циферблата: центр линии прогресса не совпадает с <c>Border</c> рамки (1.5),
+    /// иначе на углах два штриха с антиалиасингом накладываются и кажутся вдвое толще.
+    /// ≈ половина BorderThickness + половина StrokeThickness + зазор.
+    /// </summary>
+    private const double DialProgressGeometryInset = 1;
+
+    /// <summary>Контур прогресса внутри рамки циферблата; старт в центре верхней стороны, обход по часовой. Без <c>IsClosed</c>.</summary>
     private static PathGeometry CreateSpeedDialOutlineGeometry()
     {
-        var w = DialOutlineWidth;
-        var h = DialOutlineHeight;
-        var r = DialCornerRadius;
-        var midX = w * 0.5;
+        var inset = DialProgressGeometryInset;
+        var w = DialOutlineWidth - 2 * inset;
+        var h = DialOutlineHeight - 2 * inset;
+        var r = Math.Max(0, DialCornerRadius - inset);
+        var ox = inset;
+        var oy = inset;
+        var midX = ox + w * 0.5;
         var fig = new PathFigure
         {
-            StartPoint = new System.Windows.Point(midX, 0),
+            StartPoint = new System.Windows.Point(midX, oy),
             IsClosed = false
         };
-        fig.Segments.Add(new LineSegment(new System.Windows.Point(w - r, 0), true));
-        fig.Segments.Add(new ArcSegment(new System.Windows.Point(w, r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
-        fig.Segments.Add(new LineSegment(new System.Windows.Point(w, h - r), true));
-        fig.Segments.Add(new ArcSegment(new System.Windows.Point(w - r, h), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
-        fig.Segments.Add(new LineSegment(new System.Windows.Point(r, h), true));
-        fig.Segments.Add(new ArcSegment(new System.Windows.Point(0, h - r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
-        fig.Segments.Add(new LineSegment(new System.Windows.Point(0, r), true));
-        fig.Segments.Add(new ArcSegment(new System.Windows.Point(r, 0), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
-        fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, 0), true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(ox + w - r, oy), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(ox + w, oy + r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(ox + w, oy + h - r), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(ox + w - r, oy + h), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(ox + r, oy + h), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(ox, oy + h - r), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(ox, oy + r), true));
+        fig.Segments.Add(new ArcSegment(new System.Windows.Point(ox + r, oy), new System.Windows.Size(r, r), 0, false, SweepDirection.Clockwise, true));
+        fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, oy), true));
 
         var geo = new PathGeometry();
         geo.Figures.Add(fig);
@@ -142,7 +152,6 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private double _dialRingPathLength = 1;
     private TimeSpan _dialRingDuration;
-    private DispatcherTimer? _dialRingUiTimer;
     private Stopwatch? _dialRingUiSw;
 
     private void BeginDialProgressRing(TimeSpan totalDuration)
@@ -155,7 +164,11 @@ public partial class MainWindow : INotifyPropertyChanged
         if (DialProgressOutline.Data is not PathGeometry)
             DialProgressOutline.Data = geo;
 
-        var analytical = RoundedRectPerimeter(DialOutlineWidth, DialOutlineHeight, DialCornerRadius);
+        var inset = DialProgressGeometryInset;
+        var wIn = DialOutlineWidth - 2 * inset;
+        var hIn = DialOutlineHeight - 2 * inset;
+        var rIn = Math.Max(0, DialCornerRadius - inset);
+        var analytical = RoundedRectPerimeter(wIn, hIn, rIn);
         _dialRingPathLength = CoerceOutlineStrokeLength(geo, analytical);
 
         // Прогресс — длина первого штриха [0..len], offset=0: доля времени линейна по длине нарисованного контура.
@@ -166,14 +179,12 @@ public partial class MainWindow : INotifyPropertyChanged
         DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
         DialProgressOutline.Visibility = Visibility.Visible;
 
-        // Время кольца — только UI Stopwatch + DispatcherTimer (не прогресс замера), чтобы исключить рассинхрон ×N.
+        // Каждый кадр отрисовки — плавнее, чем DispatcherTimer ~50 ms.
         _dialRingUiSw = Stopwatch.StartNew();
-        _dialRingUiTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(50) };
-        _dialRingUiTimer.Tick += OnDialRingUiTick;
-        _dialRingUiTimer.Start();
+        CompositionTarget.Rendering += OnDialRingRendering;
     }
 
-    private void OnDialRingUiTick(object? sender, EventArgs e)
+    private void OnDialRingRendering(object? sender, EventArgs e)
     {
         if (_dialRingUiSw is null || DialProgressOutline.Visibility != Visibility.Visible)
             return;
@@ -182,16 +193,11 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private void StopDialRingUiTimer()
     {
-        if (_dialRingUiTimer != null)
-        {
-            _dialRingUiTimer.Tick -= OnDialRingUiTick;
-            _dialRingUiTimer.Stop();
-            _dialRingUiTimer = null;
-        }
+        CompositionTarget.Rendering -= OnDialRingRendering;
         _dialRingUiSw = null;
     }
 
-    /// <summary>Доля контура по прошедшему времени; для замера кольцо обновляет <see cref="OnDialRingUiTick"/>.</summary>
+    /// <summary>Доля контура по прошедшему времени; во время замера вызывается из <see cref="OnDialRingRendering"/>.</summary>
     private void UpdateDialProgressRingFromElapsed(TimeSpan elapsed, TimeSpan? plannedTotal = null, bool forceFull = false)
     {
         if (DialProgressOutline.Visibility != Visibility.Visible)
@@ -203,10 +209,20 @@ public partial class MainWindow : INotifyPropertyChanged
             ? 1.0
             : Math.Clamp(elapsed.Ticks / ((double)denom.Ticks * DialRingProgressSlowdown), 0, 1);
         var lit = Math.Clamp(_dialRingPathLength * t, 0, _dialRingPathLength);
+        // Без BeginAnimation на каждом кадре — иначе рывки и лишняя нагрузка.
+        DialProgressOutline.StrokeDashOffset = 0;
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { lit, 1_000_000 };
+    }
+
+    /// <summary>Сброс кольца при «Стоп» / отмене: как до замера (нет частичного прогресса).</summary>
+    private void ResetDialProgressRingAfterAbort()
+    {
+        StopDialRingUiTimer();
         DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
         DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
         DialProgressOutline.StrokeDashOffset = 0;
-        DialProgressOutline.StrokeDashArray = new DoubleCollection { lit, 1_000_000 };
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
+        DialProgressOutline.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Останавливает анимацию по времени; контур остаётся на экране до следующего замера.</summary>
@@ -306,16 +322,16 @@ public partial class MainWindow : INotifyPropertyChanged
         if (_speedTestCts != null)
         {
             try { _speedTestCts.Cancel(); } catch { /* ignore */ }
-            StopDialRingSmoothingAfterMeasure();
+            ResetSessionSpeedStats();
+            ResetDialProgressRingAfterAbort();
             CurrentMbps = 0;
-            _lastDialSpeed = -1;
-            SpeedDial.SetValueSilent(0);
+            SpeedDial.AnimateToValue(0, slideDown: true);
+            _lastDialSpeed = 0;
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
             _sessionRateSamples.Clear();
             _graphSmoothPrimed = false;
             ClearMiniGraphPaths();
-            ResetSessionSpeedStats();
             return;
         }
 
@@ -330,6 +346,9 @@ public partial class MainWindow : INotifyPropertyChanged
                 return;
             var s = SettingsStorage.Load();
             if (s.MinimizeToTrayOnStartup)
+                return;
+            // Один холодный старт: замер в трее уже стартует из App — не дублировать загрузкой окна.
+            if (s.SpeedTest.AutoStartOnTrayStartup)
                 return;
             TryAutoStartMeasureWhenWindowShownCore();
         }, DispatcherPriority.ApplicationIdle);
@@ -417,6 +436,7 @@ public partial class MainWindow : INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
+            ResetDialProgressRingAfterAbort();
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
             _sessionRateSamples.Clear();
@@ -426,6 +446,7 @@ public partial class MainWindow : INotifyPropertyChanged
         }
         catch
         {
+            ResetDialProgressRingAfterAbort();
             StopMiniGraphFadeAndResetOpacity();
             _graphSamples.Clear();
             _sessionRateSamples.Clear();
@@ -447,6 +468,9 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         if (p.Kind == SpeedTestProgressKind.Rate && p.Mbps is double mbps)
         {
+            if (!_sessionMeasuring)
+                return;
+
             var v = Math.Max(0, mbps);
             CurrentMbps = v;
 

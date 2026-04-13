@@ -6,13 +6,13 @@ public sealed class SpeedTestSettings
 {
     /// <summary>Test duration in seconds.</summary>
     [JsonPropertyName("durationSeconds")]
-    public int DurationSeconds { get; set; } = 15;
+    public int DurationSeconds { get; set; } = 10;
 
     /// <summary>Start download test when the main window is shown (including opening from tray).</summary>
     [JsonPropertyName("autoStartWhenWindowOpen")]
     public bool AutoStartWhenWindowOpen { get; set; }
 
-    /// <summary>When the app starts minimized to tray, start background quick test automatically.</summary>
+    /// <summary>On app startup, start the tray background quick test automatically (independent of window visibility).</summary>
     [JsonPropertyName("autoStartOnTrayStartup")]
     public bool AutoStartOnTrayStartup { get; set; } = true;
 }

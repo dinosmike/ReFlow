@@ -357,7 +357,7 @@ public static class SettingsStorage
         s.UiLanguage = AppLanguageCatalog.Normalize(s.UiLanguage);
 
         if (s.SpeedTest.DurationSeconds <= 0)
-            s.SpeedTest.DurationSeconds = 15;
+            s.SpeedTest.DurationSeconds = 10;
 
         if (s.SettingsFormatVersion < 7)
             s.SettingsFormatVersion = 7;

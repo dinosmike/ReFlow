@@ -38,6 +38,9 @@ public sealed class TrayService : IDisposable
     /// <summary>Последний успешный пик (макс. скорость по сэмплам, зелёный), держим до следующего клика / перезапуска.</summary>
     private string? _lastQuickTestPeakText;
 
+    /// <summary>После <see cref="OnMouseDoubleClick"/> приходит ещё MouseClick/MouseUp по второму клику — иначе они снова стартуют таймер и открывают окно.</summary>
+    private DateTime _suppressSingleClickScheduleUtc;
+
     public TrayService(UiTheme theme)
     {
         _theme = theme;
@@ -113,6 +116,8 @@ public sealed class TrayService : IDisposable
     {
         if (e.Button != MouseButtons.Left)
             return;
+        if (DateTime.UtcNow < _suppressSingleClickScheduleUtc)
+            return;
         _singleClickTimer.Interval = TimeSpan.FromMilliseconds(SingleClickDelayMs);
         _singleClickTimer.Stop();
         _singleClickTimer.Start();
@@ -123,6 +128,7 @@ public sealed class TrayService : IDisposable
         if (e.Button != MouseButtons.Left)
             return;
         _singleClickTimer.Stop();
+        _suppressSingleClickScheduleUtc = DateTime.UtcNow.AddMilliseconds(SingleClickDelayMs + 100);
         InvokeOnUi(() =>
         {
             try
@@ -208,10 +214,10 @@ public sealed class TrayService : IDisposable
         Application.Current.Shutdown();
     }
 
-    /// <summary>Старт фонового замера при запуске в трее (если включено в настройках).</summary>
+    /// <summary>Старт фонового замера в трее при запуске приложения (если включено в настройках), независимо от видимости окна.</summary>
     internal void TryAutoStartOnTrayLaunchIfNeeded(AppSettings settings)
     {
-        if (!settings.MinimizeToTrayOnStartup || !settings.SpeedTest.AutoStartOnTrayStartup)
+        if (!settings.SpeedTest.AutoStartOnTrayStartup)
             return;
         StartQuickTest(restart: true);
     }

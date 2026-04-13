@@ -127,7 +127,7 @@ public sealed class AppSettings
             Meta = new SettingsMeta { SettingsFormatVersion = 9 },
             SpeedTest = new SpeedTestSettings
             {
-                DurationSeconds = 15,
+                DurationSeconds = 10,
                 AutoStartWhenWindowOpen = false,
                 AutoStartOnTrayStartup = true
             }
