@@ -16,6 +16,10 @@ public sealed class SpeedTestSettings
     [JsonPropertyName("downloadFileUrl")]
     public string? DownloadFileUrl { get; set; }
 
+    /// <summary>Whether to use <see cref="DownloadFileUrl"/> instead of the built-in default URL.</summary>
+    [JsonPropertyName("useCustomDownloadFileUrl")]
+    public bool UseCustomDownloadFileUrl { get; set; }
+
     /// <summary>Start download test when the main window is shown (including opening from tray).</summary>
     [JsonPropertyName("autoStartWhenWindowOpen")]
     public bool AutoStartWhenWindowOpen { get; set; }

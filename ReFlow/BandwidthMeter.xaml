@@ -12,43 +12,65 @@
     </UserControl.Resources>
     <StackPanel>
         <Border x:Name="TrackShell"
-                Height="22"
-                CornerRadius="11"
+                Height="16"
+                CornerRadius="8"
                 Background="#12161C"
                 BorderBrush="{DynamicResource Rf.Border}"
-                BorderThickness="1"
-                Padding="4">
-            <Grid x:Name="TrackInner" ClipToBounds="True" Height="14">
-                <Border CornerRadius="7" Background="#1E252E"/>
-                <Border x:Name="FillHost"
-                        HorizontalAlignment="Stretch"
+                BorderThickness="1">
+            <Grid>
+                <!-- Внутренняя дорожка без Padding: так края всегда идеальная "пилюля". -->
+                <Border x:Name="TrackInnerBorder"
+                        Margin="1"
+                        Height="14"
                         CornerRadius="7"
-                        RenderTransformOrigin="0,0.5">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                            <GradientStop Color="#1B3D48" Offset="0"/>
-                            <GradientStop Color="{DynamicResource Rf.Color.Accent}" Offset="0.55"/>
-                            <GradientStop Color="#7AE8D4" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="FillScale" ScaleX="0" ScaleY="1"/>
-                    </Border.RenderTransform>
+                        Background="#1E252E"
+                        SnapsToDevicePixels="True"
+                        UseLayoutRounding="True"
+                        ClipToBounds="True">
+                    <Grid x:Name="TrackInner" ClipToBounds="True">
+                        <Path x:Name="FillPath"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Stretch"
+                              SnapsToDevicePixels="True"
+                              UseLayoutRounding="True"
+                              Stroke="{x:Null}">
+                            <Path.Fill>
+                                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                    <!-- Начало градиента = фон трека, чтобы край скругления не выглядел "грязно". -->
+                                    <GradientStop Color="#1E252E" Offset="0"/>
+                                    <GradientStop Color="{DynamicResource Rf.Color.Accent}" Offset="0.55"/>
+                                    <GradientStop Color="#7AE8D4" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Path.Fill>
+                        </Path>
+                        <Grid ClipToBounds="False">
+                            <Grid.RenderTransform>
+                                <TranslateTransform x:Name="MarkerXform" X="0"/>
+                            </Grid.RenderTransform>
+                            <Ellipse Width="12"
+                                     Height="12"
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Center"
+                                     Margin="-6,-2,0,0"
+                                     Fill="{DynamicResource Rf.Surface}"
+                                     Stroke="{DynamicResource Rf.Accent}"
+                                     StrokeThickness="2">
+                                <!-- Временно убрали тень: она может визуально "съедать" нижний левый радиус заливки. -->
+                            </Ellipse>
+                        </Grid>
+                    </Grid>
                 </Border>
-                <Canvas ClipToBounds="False">
-                    <Canvas.RenderTransform>
-                        <TranslateTransform x:Name="MarkerXform" X="0"/>
-                    </Canvas.RenderTransform>
-                    <Ellipse Canvas.Left="-6" Canvas.Top="0"
-                             Width="12" Height="12"
-                             Fill="{DynamicResource Rf.Surface}"
-                             Stroke="{DynamicResource Rf.Accent}"
-                             StrokeThickness="2">
-                        <Ellipse.Effect>
-                            <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.5"/>
-                        </Ellipse.Effect>
-                    </Ellipse>
-                </Canvas>
+
+                <!-- Обводка трека поверх всего (не клипуется внутренним Border). -->
+                <Border x:Name="TrackOutline"
+                        Margin="1"
+                        BorderBrush="{DynamicResource Rf.BandwidthMeter.TrackOutlineBrush}"
+                        BorderThickness="1"
+                        Background="Transparent"
+                        SnapsToDevicePixels="True"
+                        UseLayoutRounding="True"
+                        IsHitTestVisible="False"
+                        Panel.ZIndex="999"/>
             </Grid>
         </Border>
 

@@ -23,6 +23,8 @@
     <SolidColorBrush x:Key="Rf.Accent" Color="{StaticResource Rf.Color.Accent}"/>
     <SolidColorBrush x:Key="Rf.Accent.Dim" Color="{StaticResource Rf.Color.AccentDim}"/>
     <SolidColorBrush x:Key="Rf.SaveSuccess" Color="#5CE88A"/>
+    <!-- Bandwidth meter -->
+    <SolidColorBrush x:Key="Rf.BandwidthMeter.TrackOutlineBrush" Color="#161f2d"/>
     <!-- Кнопки: через DynamicResource, чтобы при смене темы без перезапуска обновлялись цвета -->
     <SolidColorBrush x:Key="Rf.Button.Accent.Background" Color="#122A28"/>
     <SolidColorBrush x:Key="Rf.Button.PressedBackground" Color="#1C2128"/>

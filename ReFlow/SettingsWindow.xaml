@@ -358,16 +358,31 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Скрытая настройка (показать клавишей Q): URL файла для замера -->
+                        <!-- URL файла для замера -->
                         <Border x:Name="SpeedTestUrlRow"
                                 Style="{StaticResource Rf.Settings.Card}"
-                                Visibility="Collapsed">
+                                Visibility="Visible">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}"
                                            Text="{DynamicResource Loc_SettingsWindow_SectionAdvanced}"/>
-                                <TextBlock Margin="0,0,0,8"
-                                           Foreground="{DynamicResource Rf.Text.Muted}"
-                                           Text="{DynamicResource Loc_SettingsWindow_SpeedTestUrlHint}"/>
+                                <CheckBox x:Name="UseCustomSpeedTestUrlCheck"
+                                          Margin="0,0,0,8"
+                                          Checked="UseCustomSpeedTestUrlCheck_OnChecked"
+                                          Unchecked="UseCustomSpeedTestUrlCheck_OnChecked">
+                                    <TextBlock Text="{DynamicResource Loc_SettingsWindow_UseCustomSpeedTestUrl}"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource Rf.Text.Muted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ElementName=UseCustomSpeedTestUrlCheck, Path=IsChecked}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Rf.Text.Primary}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </CheckBox>
                                 <TextBox x:Name="SpeedTestUrlBox"
                                          TextWrapping="NoWrap"
                                          VerticalContentAlignment="Center"

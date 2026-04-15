@@ -106,32 +106,11 @@ public partial class SettingsWindow
         Loaded += OnLoaded;
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == Key.Q)
-            {
-                e.Handled = true;
-                ToggleHiddenSpeedTestUrlEditor();
-                return;
-            }
             if (e.Key != Key.Escape)
                 return;
             e.Handled = true;
             RevertAndClose();
         };
-    }
-
-    private bool _showHiddenSpeedTestUrlEditor;
-
-    private void ToggleHiddenSpeedTestUrlEditor()
-    {
-        _showHiddenSpeedTestUrlEditor = !_showHiddenSpeedTestUrlEditor;
-        ApplyHiddenSpeedTestUrlEditorVisibility();
-    }
-
-    private void ApplyHiddenSpeedTestUrlEditorVisibility()
-    {
-        if (SpeedTestUrlRow == null)
-            return;
-        SpeedTestUrlRow.Visibility = _showHiddenSpeedTestUrlEditor ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -176,7 +155,10 @@ public partial class SettingsWindow
         SetDurationChoiceFromSettings();
 
         if (SpeedTestUrlBox != null)
-            SpeedTestUrlBox.Text = (_settings.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
+            SpeedTestUrlBox.Text = _settings.SpeedTest.DownloadFileUrl ?? "";
+        if (UseCustomSpeedTestUrlCheck != null)
+            UseCustomSpeedTestUrlCheck.IsChecked = _settings.SpeedTest.UseCustomDownloadFileUrl;
+        UpdateCustomSpeedTestUrlEnabled();
 
         AutostartCheck.IsChecked = settings.AutostartEnabled;
         StartupToTrayCheck.IsChecked = settings.MinimizeToTrayOnStartup;
@@ -222,6 +204,12 @@ public partial class SettingsWindow
         {
             var rawUrl = SpeedTestUrlBox.Text?.Trim() ?? "";
             _settings.SpeedTest.DownloadFileUrl = string.IsNullOrWhiteSpace(rawUrl) ? null : rawUrl;
+            var wantCustom = UseCustomSpeedTestUrlCheck?.IsChecked == true;
+            _settings.SpeedTest.UseCustomDownloadFileUrl = wantCustom && _settings.SpeedTest.DownloadFileUrl != null;
+        }
+        else
+        {
+            _settings.SpeedTest.UseCustomDownloadFileUrl = false;
         }
 
         _settings.AutostartEnabled = AutostartCheck.IsChecked == true;
@@ -239,6 +227,18 @@ public partial class SettingsWindow
         SettingsStorage.Save(_settings);
         DialogResult = true;
         Close();
+    }
+
+    private void UseCustomSpeedTestUrlCheck_OnChecked(object sender, RoutedEventArgs e) => UpdateCustomSpeedTestUrlEnabled();
+
+    private void UpdateCustomSpeedTestUrlEnabled()
+    {
+        var enabled = UseCustomSpeedTestUrlCheck?.IsChecked == true;
+        if (SpeedTestUrlBox != null)
+        {
+            SpeedTestUrlBox.IsEnabled = enabled;
+            SpeedTestUrlBox.IsReadOnly = !enabled;
+        }
     }
 
     private void Cancel_OnClick(object sender, RoutedEventArgs e) => RevertAndClose();

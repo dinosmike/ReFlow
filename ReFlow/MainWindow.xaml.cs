@@ -328,6 +328,7 @@ public partial class MainWindow : INotifyPropertyChanged
         DataContext = this;
         _tooltipDelayMs = CoerceTooltipDelayMs(TryFindResource("Rf.Tooltip.InitialShowDelayMs"));
         TooltipInitialShowDelayMs = _tooltipDelayMs;
+
         ReloadFromStorage();
         MiniGraphFillPath.Fill = BrushFromHex(MiniGraphFillColorHex);
         ResetSessionSpeedStats();
@@ -404,7 +405,7 @@ public partial class MainWindow : INotifyPropertyChanged
     private async Task TryStartSpeedTestAsync(bool showMissingUrlMessage)
     {
         var s = SettingsStorage.Load();
-        var fileUrlRaw = (s.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
+        var fileUrlRaw = ((s.SpeedTest.UseCustomDownloadFileUrl ? s.SpeedTest.DownloadFileUrl : null) ?? SpeedTestConfig.DownloadFileUrl).Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
             if (showMissingUrlMessage)

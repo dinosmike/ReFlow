@@ -363,6 +363,8 @@ public static class SettingsStorage
         s.SpeedTest.DownloadFileUrl = string.IsNullOrWhiteSpace(s.SpeedTest.DownloadFileUrl)
             ? null
             : s.SpeedTest.DownloadFileUrl.Trim();
+        if (s.SpeedTest.DownloadFileUrl == null)
+            s.SpeedTest.UseCustomDownloadFileUrl = false;
 
         if (s.SettingsFormatVersion < 7)
             s.SettingsFormatVersion = 7;

@@ -268,7 +268,7 @@ public sealed class TrayService : IDisposable
             return;
 
         var settings = SettingsStorage.Load();
-        var fileUrlRaw = (settings.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
+        var fileUrlRaw = ((settings.SpeedTest.UseCustomDownloadFileUrl ? settings.SpeedTest.DownloadFileUrl : null) ?? SpeedTestConfig.DownloadFileUrl).Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
             _notifyIcon.ShowBalloonTip(2500, "ReFlow", LocalizationService.T("Tray.NoServerUrl"), ToolTipIcon.Warning);
