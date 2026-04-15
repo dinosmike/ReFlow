@@ -358,6 +358,11 @@ public static class SettingsStorage
 
         if (s.SpeedTest.DurationSeconds <= 0)
             s.SpeedTest.DurationSeconds = 10;
+        if (s.SpeedTest.ManualDurationSeconds <= 0)
+            s.SpeedTest.ManualDurationSeconds = 10;
+        s.SpeedTest.DownloadFileUrl = string.IsNullOrWhiteSpace(s.SpeedTest.DownloadFileUrl)
+            ? null
+            : s.SpeedTest.DownloadFileUrl.Trim();
 
         if (s.SettingsFormatVersion < 7)
             s.SettingsFormatVersion = 7;

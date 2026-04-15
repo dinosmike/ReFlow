@@ -23,9 +23,12 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <BulletDecorator Background="Transparent">
+                        <BulletDecorator Background="Transparent"
+                                         VerticalAlignment="Center">
                             <BulletDecorator.Bullet>
-                                <Grid Width="16" Height="16">
+                                <Grid Width="16"
+                                      Height="16"
+                                      VerticalAlignment="Center">
                                     <Ellipse x:Name="BulletOuter"
                                              Stroke="{DynamicResource Rf.Border}"
                                              StrokeThickness="1"
@@ -54,6 +57,18 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Варианты длительности: выбранный яркий, остальные приглушённые. -->
+        <Style x:Key="DurationChoiceRadioStyle"
+               TargetType="RadioButton"
+               BasedOn="{StaticResource ThemeRadioStyle}">
+            <Setter Property="Opacity" Value="0.45"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Opacity" Value="1"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Стрелки внутри общего поля с цифрой: без собственной рамки, только подсветка при наведении. -->
@@ -225,57 +240,102 @@
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource Rf.Text.Primary}"
                                            Text="{DynamicResource Loc_SettingsWindow_AutoMeasureDurationLabel}"/>
-                                <Border Grid.Column="1"
-                                        MinWidth="88"
-                                        Height="32"
-                                        CornerRadius="6"
-                                        Background="{DynamicResource Rf.Surface}"
-                                        BorderBrush="{DynamicResource Rf.Border}"
-                                        BorderThickness="1"
-                                        SnapsToDevicePixels="True">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="22"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="DurationSecondsBox"
-                                                 Grid.Column="0"
-                                                 BorderThickness="0"
-                                                 Background="Transparent"
-                                                 Padding="6,0,2,0"
-                                                 MinHeight="0"
-                                                 VerticalAlignment="Stretch"
-                                                 VerticalContentAlignment="Center"
-                                                 HorizontalContentAlignment="Center"
-                                                 MaxLength="4"
-                                                 ToolTip="{DynamicResource Loc_SettingsWindow_AutoMeasureDurationTooltip}"/>
-                                        <Border Grid.Column="1"
-                                                BorderBrush="{DynamicResource Rf.Border}"
-                                                BorderThickness="1,0,0,0"
-                                                Margin="0,4,4,4">
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="*"/>
-                                                    <RowDefinition Height="1"/>
-                                                    <RowDefinition Height="*"/>
-                                                </Grid.RowDefinitions>
-                                                <RepeatButton Grid.Row="0"
-                                                              Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
-                                                              Content="▲"
-                                                              Click="DurationUp_OnClick"/>
-                                                <Border Grid.Row="1"
-                                                        Background="{DynamicResource Rf.Border}"
-                                                        Height="1"
-                                                        VerticalAlignment="Center"
-                                                        Margin="0,-0.5,0,-0.5"/>
-                                                <RepeatButton Grid.Row="2"
-                                                              Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
-                                                              Content="▼"
-                                                              Click="DurationDown_OnClick"/>
-                                            </Grid>
-                                        </Border>
-                                    </Grid>
-                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            MinHeight="32">
+                                    <RadioButton x:Name="DurationPreset10"
+                                                 Style="{StaticResource DurationChoiceRadioStyle}"
+                                                 GroupName="DurationChoice"
+                                                 Content="10"
+                                                 VerticalAlignment="Center"
+                                                 MinHeight="32"
+                                                 Margin="0,0,16,0"
+                                                 Checked="DurationPreset10_OnChecked"/>
+                                    <RadioButton x:Name="DurationPreset30"
+                                                 Style="{StaticResource DurationChoiceRadioStyle}"
+                                                 GroupName="DurationChoice"
+                                                 Content="30"
+                                                 VerticalAlignment="Center"
+                                                 MinHeight="32"
+                                                 Margin="0,0,16,0"
+                                                 Checked="DurationPreset30_OnChecked"/>
+                                    <RadioButton x:Name="DurationPreset60"
+                                                 Style="{StaticResource DurationChoiceRadioStyle}"
+                                                 GroupName="DurationChoice"
+                                                 Content="60"
+                                                 VerticalAlignment="Center"
+                                                 MinHeight="32"
+                                                 Margin="0,0,16,0"
+                                                 Checked="DurationPreset60_OnChecked"/>
+
+                                    <RadioButton x:Name="DurationManual"
+                                                 Style="{StaticResource DurationChoiceRadioStyle}"
+                                                 GroupName="DurationChoice"
+                                                 Content=""
+                                                 VerticalAlignment="Center"
+                                                 MinHeight="32"
+                                                 Margin="0,0,2,0"
+                                                 Checked="DurationManual_OnChecked"/>
+
+                                    <Border x:Name="DurationManualBox"
+                                            MinWidth="88"
+                                            Height="32"
+                                            VerticalAlignment="Center"
+                                            CornerRadius="6"
+                                            Background="{DynamicResource Rf.Surface}"
+                                            BorderBrush="{DynamicResource Rf.Border}"
+                                            BorderThickness="1"
+                                            SnapsToDevicePixels="True">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="22"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="DurationSecondsBox"
+                                                     Grid.Column="0"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     Padding="6,0,2,0"
+                                                     MinHeight="0"
+                                                     VerticalAlignment="Stretch"
+                                                     VerticalContentAlignment="Center"
+                                                     HorizontalContentAlignment="Center"
+                                                     MaxLength="4"
+                                                     PreviewMouseDown="DurationSecondsBox_OnPreviewMouseDown"
+                                                     GotKeyboardFocus="DurationSecondsBox_OnGotKeyboardFocus"
+                                                     ToolTip="{DynamicResource Loc_SettingsWindow_AutoMeasureDurationTooltip}">
+                                            </TextBox>
+                                            <Border Grid.Column="1"
+                                                    BorderBrush="{DynamicResource Rf.Border}"
+                                                    BorderThickness="1,0,0,0"
+                                                    Margin="0,4,4,4">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="1"/>
+                                                        <RowDefinition Height="*"/>
+                                                    </Grid.RowDefinitions>
+                                                    <RepeatButton x:Name="DurationUpBtn"
+                                                                  Grid.Row="0"
+                                                                  Content="▲"
+                                                                  Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                                  Click="DurationUp_OnClick"/>
+                                                    <Border Grid.Row="1"
+                                                            Background="{DynamicResource Rf.Border}"
+                                                            Height="1"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,-0.5,0,-0.5"/>
+                                                    <RepeatButton x:Name="DurationDownBtn"
+                                                                  Grid.Row="2"
+                                                                  Content="▼"
+                                                                  Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                                  Click="DurationDown_OnClick"/>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -295,6 +355,23 @@
                                                  GroupName="TrayClickPair"
                                                  Content="{DynamicResource Loc_SettingsWindow_TrayClickQuickSingleOpenDouble}"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Скрытая настройка (показать клавишей Q): URL файла для замера -->
+                        <Border x:Name="SpeedTestUrlRow"
+                                Style="{StaticResource Rf.Settings.Card}"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}"
+                                           Text="{DynamicResource Loc_SettingsWindow_SectionAdvanced}"/>
+                                <TextBlock Margin="0,0,0,8"
+                                           Foreground="{DynamicResource Rf.Text.Muted}"
+                                           Text="{DynamicResource Loc_SettingsWindow_SpeedTestUrlHint}"/>
+                                <TextBox x:Name="SpeedTestUrlBox"
+                                         TextWrapping="NoWrap"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="{DynamicResource Loc_SettingsWindow_SpeedTestUrlHint}"/>
                             </StackPanel>
                         </Border>
                 </StackPanel>

@@ -13,6 +13,47 @@ public partial class SettingsWindow
     private bool _languageComboLoading;
     private string _languageAtOpen = "en";
 
+    private void SetDurationChoiceFromSettings()
+    {
+        // Ручное поле всегда показывает последнее ручное значение, независимо от выбранного пресета.
+        var manual = Math.Clamp(_settings.SpeedTest.ManualDurationSeconds, 1, 600);
+        DurationSecondsBox.Text = manual.ToString(CultureInfo.InvariantCulture);
+
+        var sec = Math.Clamp(_settings.SpeedTestDurationSeconds, 1, 600);
+        if (sec == 10)
+            DurationPreset10.IsChecked = true;
+        else if (sec == 30)
+            DurationPreset30.IsChecked = true;
+        else if (sec == 60)
+            DurationPreset60.IsChecked = true;
+        else
+        {
+            DurationManual.IsChecked = true;
+            // Если сейчас выбран ручной режим, показываем текущее значение замера (оно и есть ручное).
+            DurationSecondsBox.Text = sec.ToString(CultureInfo.InvariantCulture);
+        }
+
+        UpdateManualDurationEnabled();
+    }
+
+    private void UpdateManualDurationEnabled()
+    {
+        var enabled = DurationManual.IsChecked == true;
+        DurationManualBox.IsEnabled = enabled;
+        DurationUpBtn.IsEnabled = enabled;
+        DurationDownBtn.IsEnabled = enabled;
+        DurationSecondsBox.IsReadOnly = !enabled;
+        DurationSecondsBox.Focusable = enabled;
+
+        var foreKey = enabled ? "Rf.Text.Primary" : "Rf.Text.Muted";
+        if (TryFindResource(foreKey) is System.Windows.Media.Brush b)
+        {
+            DurationSecondsBox.Foreground = b;
+            DurationUpBtn.Foreground = b;
+            DurationDownBtn.Foreground = b;
+        }
+    }
+
     /// <summary>Если true — после первой вёрстки центрировать по рабочей области экрана (трей, <see cref="SizeToContent"/>).</summary>
     internal bool CenterOnWorkAreaAfterLoad { get; set; }
 
@@ -65,6 +106,12 @@ public partial class SettingsWindow
         Loaded += OnLoaded;
         PreviewKeyDown += (_, e) =>
         {
+            if (e.Key == Key.Q)
+            {
+                e.Handled = true;
+                ToggleHiddenSpeedTestUrlEditor();
+                return;
+            }
             if (e.Key != Key.Escape)
                 return;
             e.Handled = true;
@@ -72,10 +119,40 @@ public partial class SettingsWindow
         };
     }
 
+    private bool _showHiddenSpeedTestUrlEditor;
+
+    private void ToggleHiddenSpeedTestUrlEditor()
+    {
+        _showHiddenSpeedTestUrlEditor = !_showHiddenSpeedTestUrlEditor;
+        ApplyHiddenSpeedTestUrlEditorVisibility();
+    }
+
+    private void ApplyHiddenSpeedTestUrlEditorVisibility()
+    {
+        if (SpeedTestUrlRow == null)
+            return;
+        SpeedTestUrlRow.Visibility = _showHiddenSpeedTestUrlEditor ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (CenterOnWorkAreaAfterLoad)
             CenterOnWorkArea();
+
+        // Не ставим каретку в ручное поле длительности при открытии окна.
+        // Фокус — на первый чекбокс, чтобы курсор нигде не мигал, пока пользователь не кликнет сам.
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                Keyboard.ClearFocus();
+                AutostartCheck.Focus();
+            }
+            catch
+            {
+                // ignore
+            }
+        }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void CenterOnWorkArea()
@@ -96,7 +173,10 @@ public partial class SettingsWindow
         LanguageCombo.SelectedValue = _languageAtOpen;
         _languageComboLoading = false;
 
-        DurationSecondsBox.Text = settings.SpeedTestDurationSeconds.ToString(CultureInfo.InvariantCulture);
+        SetDurationChoiceFromSettings();
+
+        if (SpeedTestUrlBox != null)
+            SpeedTestUrlBox.Text = (_settings.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
 
         AutostartCheck.IsChecked = settings.AutostartEnabled;
         StartupToTrayCheck.IsChecked = settings.MinimizeToTrayOnStartup;
@@ -121,11 +201,28 @@ public partial class SettingsWindow
             ? TrayIconClickAction.OpenWindow
             : TrayIconClickAction.QuickTest;
 
-        if (!int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var sec) || sec < 1)
-            sec = 15;
+        int sec;
+        if (DurationPreset10.IsChecked == true)
+            sec = 10;
+        else if (DurationPreset30.IsChecked == true)
+            sec = 30;
+        else if (DurationPreset60.IsChecked == true)
+            sec = 60;
+        else if (!int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out sec) || sec < 1)
+            sec = Math.Clamp(_settings.SpeedTest.ManualDurationSeconds, 1, 600);
         if (sec > 600)
             sec = 600;
         _settings.SpeedTestDurationSeconds = sec;
+        if (DurationManual.IsChecked == true)
+            _settings.SpeedTest.ManualDurationSeconds = sec;
+        else if (int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var manualSec) && manualSec >= 1)
+            _settings.SpeedTest.ManualDurationSeconds = Math.Clamp(manualSec, 1, 600);
+
+        if (SpeedTestUrlBox != null)
+        {
+            var rawUrl = SpeedTestUrlBox.Text?.Trim() ?? "";
+            _settings.SpeedTest.DownloadFileUrl = string.IsNullOrWhiteSpace(rawUrl) ? null : rawUrl;
+        }
 
         _settings.AutostartEnabled = AutostartCheck.IsChecked == true;
         _settings.MinimizeToTrayOnStartup = StartupToTrayCheck.IsChecked == true;
@@ -191,10 +288,45 @@ public partial class SettingsWindow
 
     private void DurationDown_OnClick(object sender, RoutedEventArgs e) => BumpDurationSeconds(-1);
 
+    private void DurationPreset10_OnChecked(object sender, RoutedEventArgs e)
+    {
+        UpdateManualDurationEnabled();
+    }
+
+    private void DurationPreset30_OnChecked(object sender, RoutedEventArgs e)
+    {
+        UpdateManualDurationEnabled();
+    }
+
+    private void DurationPreset60_OnChecked(object sender, RoutedEventArgs e)
+    {
+        UpdateManualDurationEnabled();
+    }
+
+    private void DurationManual_OnChecked(object sender, RoutedEventArgs e)
+    {
+        UpdateManualDurationEnabled();
+    }
+
+    private void DurationSecondsBox_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DurationManual.IsChecked != true)
+            DurationManual.IsChecked = true;
+    }
+
+    private void DurationSecondsBox_OnGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (DurationManual.IsChecked != true)
+            DurationManual.IsChecked = true;
+    }
+
     private void BumpDurationSeconds(int delta)
     {
+        if (DurationManual.IsChecked != true)
+            DurationManual.IsChecked = true;
+
         if (!int.TryParse(DurationSecondsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-            v = 15;
+            v = 10;
         v = Math.Clamp(v + delta, 1, 600);
         DurationSecondsBox.Text = v.ToString(CultureInfo.InvariantCulture);
     }

@@ -13,6 +13,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using System.Windows.Shell;
 using WinFormsScreen = System.Windows.Forms.Screen;
 using MessageBox = System.Windows.MessageBox;
 using ReFlow.Models;
@@ -154,6 +155,22 @@ public partial class MainWindow : INotifyPropertyChanged
     private TimeSpan _dialRingDuration;
     private Stopwatch? _dialRingUiSw;
 
+    private void ClearTaskbarProgress()
+    {
+        if (TaskbarInfo == null)
+            return;
+        TaskbarInfo.ProgressState = TaskbarItemProgressState.None;
+        TaskbarInfo.ProgressValue = 0;
+    }
+
+    private void SetTaskbarProgress(double t)
+    {
+        if (TaskbarInfo == null)
+            return;
+        TaskbarInfo.ProgressState = TaskbarItemProgressState.Normal;
+        TaskbarInfo.ProgressValue = Math.Clamp(t, 0, 1);
+    }
+
     private void BeginDialProgressRing(TimeSpan totalDuration)
     {
         StopDialRingUiTimer();
@@ -182,6 +199,8 @@ public partial class MainWindow : INotifyPropertyChanged
         // Каждый кадр отрисовки — плавнее, чем DispatcherTimer ~50 ms.
         _dialRingUiSw = Stopwatch.StartNew();
         CompositionTarget.Rendering += OnDialRingRendering;
+
+        SetTaskbarProgress(0);
     }
 
     private void OnDialRingRendering(object? sender, EventArgs e)
@@ -205,6 +224,10 @@ public partial class MainWindow : INotifyPropertyChanged
         var denom = plannedTotal ?? _dialRingDuration;
         if (denom <= TimeSpan.Zero || _dialRingPathLength <= 0)
             return;
+        // Taskbar-прогресс должен строго соответствовать длительности замера из настроек (без визуального замедления).
+        var taskbarT = forceFull ? 1.0 : Math.Clamp(elapsed.Ticks / (double)denom.Ticks, 0, 1);
+        SetTaskbarProgress(taskbarT);
+
         var t = forceFull
             ? 1.0
             : Math.Clamp(elapsed.Ticks / ((double)denom.Ticks * DialRingProgressSlowdown), 0, 1);
@@ -223,6 +246,7 @@ public partial class MainWindow : INotifyPropertyChanged
         DialProgressOutline.StrokeDashOffset = 0;
         DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
         DialProgressOutline.Visibility = Visibility.Collapsed;
+        ClearTaskbarProgress();
     }
 
     /// <summary>Останавливает анимацию по времени; контур остаётся на экране до следующего замера.</summary>
@@ -238,6 +262,9 @@ public partial class MainWindow : INotifyPropertyChanged
         DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
         DialProgressOutline.StrokeDashOffset = holdOffset;
         DialProgressOutline.StrokeDashArray = holdDash;
+
+        // В панели задач прогресс нужен только во время замера.
+        ClearTaskbarProgress();
     }
 
     private readonly SpeedTestService _speedTest = new(new System.Net.Http.HttpClient());
@@ -377,7 +404,7 @@ public partial class MainWindow : INotifyPropertyChanged
     private async Task TryStartSpeedTestAsync(bool showMissingUrlMessage)
     {
         var s = SettingsStorage.Load();
-        var fileUrlRaw = SpeedTestConfig.DownloadFileUrl.Trim();
+        var fileUrlRaw = (s.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
             if (showMissingUrlMessage)

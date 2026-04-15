@@ -75,7 +75,20 @@ public sealed class TrayService : IDisposable
         _notifyIcon.MouseClick += OnNotifyIconMouseClick;
         _notifyIcon.MouseDoubleClick += OnMouseDoubleClick;
 
-        _notifyIcon.ContextMenuStrip = BuildContextMenu();
+        var menu = new ContextMenuStrip();
+        menu.Opening += (_, _) =>
+        {
+            try
+            {
+                RebuildContextMenu(menu);
+            }
+            catch
+            {
+                LogTrayException("ContextMenu.Opening");
+            }
+        };
+        RebuildContextMenu(menu);
+        _notifyIcon.ContextMenuStrip = menu;
     }
 
     /// <summary>Перерисовать иконку трея под выбранную тему (цвета как в UI).</summary>
@@ -89,23 +102,33 @@ public sealed class TrayService : IDisposable
     public void RefreshTexts()
     {
         _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-        var oldMenu = _notifyIcon.ContextMenuStrip;
-        _notifyIcon.ContextMenuStrip = BuildContextMenu();
-        oldMenu?.Dispose();
+        if (_notifyIcon.ContextMenuStrip != null)
+            RebuildContextMenu(_notifyIcon.ContextMenuStrip);
     }
 
-    private ContextMenuStrip BuildContextMenu()
+    private void RebuildContextMenu(ContextMenuStrip menu)
     {
-        var menu = new ContextMenuStrip();
-        var settings = SettingsStorage.Load();
-
+        menu.SuspendLayout();
+        menu.Items.Clear();
         menu.Items.Add(LocalizationService.T("Tray.MenuOpen"), null, (_, _) => ShowMain());
-        menu.Items.Add(LocalizationService.T("Tray.MenuQuickTest"), null, (_, _) => StartQuickTest(restart: true));
+        if (IsQuickTestRunning())
+            menu.Items.Add(LocalizationService.T("Tray.MenuStopQuickTest"), null, (_, _) => StopQuickTest());
+        else
+            menu.Items.Add(LocalizationService.T("Tray.MenuQuickTest"), null, (_, _) => StartQuickTest(restart: true));
         menu.Items.Add(LocalizationService.T("Tray.MenuSettings"), null, (_, _) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
 
         menu.Items.Add(LocalizationService.T("Tray.MenuExit"), null, (_, _) => ExitApp());
-        return menu;
+        menu.ResumeLayout();
+    }
+
+    private bool IsQuickTestRunning() => _quickTestCts is { IsCancellationRequested: false };
+
+    private void StopQuickTest()
+    {
+        try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
+
+        // Пункт меню обновится при следующем Opening.
     }
 
     private void OnNotifyIconMouseUp(object? sender, MouseEventArgs e) => ScheduleSingleClickIfLeft(e);
@@ -245,15 +268,16 @@ public sealed class TrayService : IDisposable
             return;
 
         var settings = SettingsStorage.Load();
-        var fileUrlRaw = SpeedTestConfig.DownloadFileUrl.Trim();
+        var fileUrlRaw = (settings.SpeedTest.DownloadFileUrl ?? SpeedTestConfig.DownloadFileUrl).Trim();
         if (string.IsNullOrWhiteSpace(fileUrlRaw))
         {
             _notifyIcon.ShowBalloonTip(2500, "ReFlow", LocalizationService.T("Tray.NoServerUrl"), ToolTipIcon.Warning);
             return;
         }
 
-        _quickTestCts = new CancellationTokenSource();
-        var ct = _quickTestCts.Token;
+        var cts = new CancellationTokenSource();
+        _quickTestCts = cts;
+        var ct = cts.Token;
         var gen = ++_quickTestGeneration;
         var samples = new List<double>();
 
@@ -284,6 +308,7 @@ public sealed class TrayService : IDisposable
                     var peakMbps = samples.Count > 0 ? samples.Max() : result.Download.AverageMbps;
                     _quickTestUiSealedGeneration = gen;
                     ShowFinalMaxMbps(peakMbps);
+                    FinalizeQuickTestIfCurrent(gen, cts);
                 });
             }
             catch (OperationCanceledException)
@@ -294,6 +319,7 @@ public sealed class TrayService : IDisposable
                         return;
                     _quickTestUiSealedGeneration = gen;
                     RestoreLastQuickTestGlyphOrBase();
+                    FinalizeQuickTestIfCurrent(gen, cts);
                 });
             }
             catch
@@ -304,10 +330,22 @@ public sealed class TrayService : IDisposable
                         return;
                     _quickTestUiSealedGeneration = gen;
                     RestoreLastQuickTestGlyphOrBase();
+                    FinalizeQuickTestIfCurrent(gen, cts);
                 });
                 LogTrayException("QuickTest");
             }
         }, ct);
+    }
+
+    private void FinalizeQuickTestIfCurrent(int gen, CancellationTokenSource cts)
+    {
+        if (gen != _quickTestGeneration)
+            return;
+        if (!ReferenceEquals(_quickTestCts, cts))
+            return;
+
+        _quickTestCts = null;
+        try { cts.Dispose(); } catch { /* ignore */ }
     }
 
     private static void LogTrayException(string where)

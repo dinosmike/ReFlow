@@ -8,6 +8,14 @@ public sealed class SpeedTestSettings
     [JsonPropertyName("durationSeconds")]
     public int DurationSeconds { get; set; } = 10;
 
+    /// <summary>Last manual duration value shown in settings (seconds).</summary>
+    [JsonPropertyName("manualDurationSeconds")]
+    public int ManualDurationSeconds { get; set; } = 10;
+
+    /// <summary>Optional override for the speed test download URL (if empty/null, <see cref="SpeedTestConfig.DownloadFileUrl"/> is used).</summary>
+    [JsonPropertyName("downloadFileUrl")]
+    public string? DownloadFileUrl { get; set; }
+
     /// <summary>Start download test when the main window is shown (including opening from tray).</summary>
     [JsonPropertyName("autoStartWhenWindowOpen")]
     public bool AutoStartWhenWindowOpen { get; set; }

@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:ReFlow"
         xmlns:controls="clr-namespace:ReFlow.Controls"
         Title="{DynamicResource Loc_Common_AppTitle}"
-        Width="480" MinWidth="450"
+        Width="440" MinWidth="350"
         SizeToContent="Height"
         WindowStartupLocation="Manual"
         WindowStyle="None"
@@ -15,6 +15,11 @@
     <Window.Resources>
         <sys:Int32 x:Key="Rf.Tooltip.InitialShowDelayMs">100</sys:Int32>
     </Window.Resources>
+    <Window.TaskbarItemInfo>
+        <shell:TaskbarItemInfo x:Name="TaskbarInfo"
+                               ProgressState="None"
+                               ProgressValue="0"/>
+    </Window.TaskbarItemInfo>
     <Window.RenderTransform>
         <ScaleTransform x:Name="TrayHideScale" ScaleX="1" ScaleY="1"/>
     </Window.RenderTransform>

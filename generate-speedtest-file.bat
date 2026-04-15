@@ -5,7 +5,7 @@ REM Creates 2GB random speedtest file: speedtest.bin
 REM Output location: same folder as this .bat
 
 set "OUT=%~dp0speedtest.bin"
-set "SIZE=2GB"
+set "SIZE=1GB"
 
 echo.
 echo == ReFlow: generating %SIZE% file ==
