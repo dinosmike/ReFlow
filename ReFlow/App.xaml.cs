@@ -19,6 +19,18 @@ public partial class App : System.Windows.Application
     /// <summary>Истинно при «Выход» из трея — чтобы не отменять закрытие в OnClosing.</summary>
     internal static bool ShutdownRequested { get; set; }
 
+    private static void RunOnUiSync(Action action)
+    {
+        var disp = Current?.Dispatcher;
+        if (disp == null || disp.HasShutdownStarted)
+            return;
+
+        if (disp.CheckAccess())
+            action();
+        else
+            disp.Invoke(action, DispatcherPriority.Send);
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += (_, ex) =>
@@ -172,12 +184,40 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            var s = SettingsStorage.Load();
-            if (!s.AskOnExit)
-                return;
+            RunOnUiSync(() =>
+            {
+                var s = SettingsStorage.Load();
+                if (!s.AskOnExit)
+                    return;
 
-            var dlg = new AutostartPromptWindow();
-            dlg.ShowDialog();
+                var dlg = new AutostartPromptWindow();
+
+                // Must be shown on the WPF UI thread; also ensure it's not hidden behind the main window.
+                var owner = Current?.MainWindow;
+                if (owner != null)
+                {
+                    dlg.Owner = owner;
+                    dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                    dlg.ShowInTaskbar = false;
+                }
+                else
+                {
+                    dlg.Owner = null;
+                    dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                    dlg.ShowInTaskbar = true;
+                }
+
+                dlg.ShowActivated = true;
+                dlg.Topmost = true;
+                try
+                {
+                    dlg.ShowDialog();
+                }
+                finally
+                {
+                    dlg.Topmost = false;
+                }
+            });
         }
         catch
         {

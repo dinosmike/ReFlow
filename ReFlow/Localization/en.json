@@ -71,6 +71,8 @@
   "SettingsWindow.SectionAdvanced": "ADVANCED",
   "SettingsWindow.UseCustomSpeedTestUrl": "Specify the path to your own file for measuring speed:",
   "SettingsWindow.SpeedTestUrlHint": "Speed test file URL. If unchecked or empty, the built-in default URL is used.",
+  "SettingsWindow.ClearSpeedTestUrlHistory": "Clear URL history",
+  "SettingsWindow.RemoveSpeedTestUrlFromHistory": "Remove URL from history",
   "SettingsWindow.TrayClickQuickSingleOpenDouble": "Single click – quick measurement, double click – application window.",
   "SettingsWindow.TrayClickOpenSingleQuickDouble": "Single click – application window, double click – quick measurement.",
   "SettingsWindow.Cancel": "Cancel",

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Encodings.Web;
@@ -36,6 +37,21 @@ public static class SettingsStorage
     private const string SettingsFileName = "ReFlow_settings.json";
     private const string LegacySettingsFileName = "settings.json";
     private const string SettingsFileHeaderLine = "Это файл настроек программы ReFlow";
+
+    /// <summary>
+    /// Known <c>speedTest</c> keys from <see cref="SpeedTestSettings"/> (stable on-disk ordering).
+    /// Extra keys (if any) are preserved after these, sorted for predictability.
+    /// </summary>
+    private static readonly string[] SpeedTestKnownKeys =
+    {
+        "durationSeconds",
+        "manualDurationSeconds",
+        "downloadFileUrl",
+        "downloadFileUrlHistory",
+        "useCustomDownloadFileUrl",
+        "autoStartWhenWindowOpen",
+        "autoStartOnTrayStartup"
+    };
 
     public static string SettingsDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReFlow");
@@ -216,6 +232,7 @@ public static class SettingsStorage
         {
             MergeModelIntoExistingJson(root, modelObj);
             StripLegacyJsonKeys(root);
+            NormalizeSpeedTestJsonObject(root);
         }
         else
         {
@@ -267,6 +284,37 @@ public static class SettingsStorage
             tray.Remove("showResolutionListInTrayMenu");
             tray.Remove("showProfileNamesInTrayMenu");
         }
+    }
+
+    private static void NormalizeSpeedTestJsonObject(JsonObject root)
+    {
+        if (!root.TryGetPropertyValue("speedTest", out var stNode) || stNode is not JsonObject merged)
+            return;
+
+        var next = new JsonObject();
+
+        // Known keys: keep merged values, but enforce stable ordering (merge into JsonObject can scramble insertion order).
+        foreach (var key in SpeedTestKnownKeys)
+        {
+            if (!merged.TryGetPropertyValue(key, out var mergedValue))
+                continue;
+            if (mergedValue is null)
+                continue;
+            next[key] = CloneNode(mergedValue);
+        }
+
+        // Unknown/extra keys: preserve after known keys, sorted for predictable diffs.
+        var known = new HashSet<string>(SpeedTestKnownKeys, StringComparer.Ordinal);
+        foreach (var kvp in merged.OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            if (known.Contains(kvp.Key))
+                continue;
+            if (kvp.Value is null)
+                continue;
+            next[kvp.Key] = CloneNode(kvp.Value);
+        }
+
+        root["speedTest"] = next;
     }
 
     private static JsonObject ParseJsonLenient(string json)
@@ -359,12 +407,24 @@ public static class SettingsStorage
         if (s.SpeedTest.DurationSeconds <= 0)
             s.SpeedTest.DurationSeconds = 10;
         if (s.SpeedTest.ManualDurationSeconds <= 0)
-            s.SpeedTest.ManualDurationSeconds = 10;
+            s.SpeedTest.ManualDurationSeconds = 5;
         s.SpeedTest.DownloadFileUrl = string.IsNullOrWhiteSpace(s.SpeedTest.DownloadFileUrl)
             ? null
             : s.SpeedTest.DownloadFileUrl.Trim();
         if (s.SpeedTest.DownloadFileUrl == null)
             s.SpeedTest.UseCustomDownloadFileUrl = false;
+
+        // URL history (trim, drop blanks, de-dupe case-insensitive, keep max N)
+        s.SpeedTest.DownloadFileUrlHistory ??= new();
+        var maxHistory = 15;
+        var cleaned = s.SpeedTest.DownloadFileUrlHistory
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(maxHistory)
+            .ToList();
+        s.SpeedTest.DownloadFileUrlHistory = cleaned;
 
         if (s.SettingsFormatVersion < 7)
             s.SettingsFormatVersion = 7;
@@ -373,7 +433,7 @@ public static class SettingsStorage
         {
             // В JSON до v8 полей не было: десериализатор даёт false для обоих — задаём осмысленные умолчания.
             s.SpeedTest.AutoStartWhenWindowOpen = false;
-            s.SpeedTest.AutoStartOnTrayStartup = true;
+            s.SpeedTest.AutoStartOnTrayStartup = false;
             s.SettingsFormatVersion = 8;
         }
 

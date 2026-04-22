@@ -71,6 +71,8 @@
   "SettingsWindow.SectionAdvanced": "ДОПОЛНИТЕЛЬНО",
   "SettingsWindow.UseCustomSpeedTestUrl": "Указать путь к собственному файлу для замера скорости:",
   "SettingsWindow.SpeedTestUrlHint": "URL файла для замера скорости. Если галочка снята или поле пустое — используется значение по умолчанию из кода.",
+  "SettingsWindow.ClearSpeedTestUrlHistory": "Очистить историю адресов",
+  "SettingsWindow.RemoveSpeedTestUrlFromHistory": "Удалить адрес из истории",
   "SettingsWindow.TrayClickQuickSingleOpenDouble": "Один клик – быстрый замер, двойной клик – окно программы.",
   "SettingsWindow.TrayClickOpenSingleQuickDouble": "Один клик – окно программы, двойной клик – быстрый замер.",
   "SettingsWindow.Cancel": "Отмена",

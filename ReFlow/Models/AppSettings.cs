@@ -128,9 +128,9 @@ public sealed class AppSettings
             SpeedTest = new SpeedTestSettings
             {
                 DurationSeconds = 10,
-                ManualDurationSeconds = 10,
+                ManualDurationSeconds = 5,
                 AutoStartWhenWindowOpen = false,
-                AutoStartOnTrayStartup = true
+                AutoStartOnTrayStartup = false
             }
         };
     }

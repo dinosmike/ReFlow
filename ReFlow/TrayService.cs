@@ -176,6 +176,17 @@ public sealed class TrayService : IDisposable
             disp.BeginInvoke(DispatcherPriority.Input, action);
     }
 
+    private static void InvokeOnUiSync(Action action)
+    {
+        var disp = Application.Current?.Dispatcher;
+        if (disp == null || disp.HasShutdownStarted)
+            return;
+        if (disp.CheckAccess())
+            action();
+        else
+            disp.Invoke(action, DispatcherPriority.Send);
+    }
+
     private void ExecuteTrayAction(bool isDouble)
     {
         var pairing = SettingsStorage.Load().TrayClickPairing;
@@ -232,9 +243,12 @@ public sealed class TrayService : IDisposable
 
     private static void ExitApp()
     {
-        App.TryShowAutostartPromptOnFirstExit();
-        App.ShutdownRequested = true;
-        Application.Current.Shutdown();
+        InvokeOnUiSync(() =>
+        {
+            App.TryShowAutostartPromptOnFirstExit();
+            App.ShutdownRequested = true;
+            Application.Current.Shutdown();
+        });
     }
 
     /// <summary>Старт фонового замера в трее при запуске приложения (если включено в настройках), независимо от видимости окна.</summary>
