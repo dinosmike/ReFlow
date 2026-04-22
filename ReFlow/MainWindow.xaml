@@ -121,6 +121,29 @@
                             <controls:SpeedRollingDigits x:Name="SpeedDial"
                                                          HorizontalAlignment="Center"
                                                          VerticalAlignment="Center"/>
+                            <!-- Финальное свечение (резко появляется, плавно исчезает) -->
+                            <Path x:Name="DialCompleteGlow"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Width="278"
+                                  Height="130"
+                                  Stretch="None"
+                                  Stroke="#68e2cf"
+                                  StrokeThickness="6"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  Fill="{x:Null}"
+                                  Opacity="0"
+                                  Visibility="Collapsed"
+                                  IsHitTestVisible="False">
+                                <Path.Effect>
+                                    <DropShadowEffect ShadowDepth="0"
+                                                      BlurRadius="18"
+                                                      Opacity="1"
+                                                      Color="#68e2cf"/>
+                                </Path.Effect>
+                            </Path>
                             <Path x:Name="DialProgressOutline"
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center"

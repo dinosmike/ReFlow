@@ -43,7 +43,9 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private void InitDialProgressOutline()
     {
-        DialProgressOutline.Data = CreateSpeedDialOutlineGeometry();
+        var geo = CreateSpeedDialOutlineGeometry();
+        DialProgressOutline.Data = geo;
+        DialCompleteGlow.Data = geo;
     }
 
     /// <summary>Периметр скруглённого прямоугольника (fallback, если не удалось снять длину с геометрии).</summary>
@@ -154,6 +156,31 @@ public partial class MainWindow : INotifyPropertyChanged
     private double _dialRingPathLength = 1;
     private TimeSpan _dialRingDuration;
     private Stopwatch? _dialRingUiSw;
+
+    private void PlayMeasureCompleteGlow()
+    {
+        if (DialCompleteGlow == null)
+            return;
+
+        DialCompleteGlow.BeginAnimation(UIElement.OpacityProperty, null);
+
+        DialCompleteGlow.Visibility = Visibility.Visible;
+        DialCompleteGlow.Opacity = 1;
+
+        var fade = new DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(2000)))
+        {
+            FillBehavior = FillBehavior.Stop,
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        fade.Completed += (_, _) =>
+        {
+            DialCompleteGlow.BeginAnimation(UIElement.OpacityProperty, null);
+            DialCompleteGlow.Opacity = 0;
+            DialCompleteGlow.Visibility = Visibility.Collapsed;
+        };
+
+        DialCompleteGlow.BeginAnimation(UIElement.OpacityProperty, fade);
+    }
 
     private void ClearTaskbarProgress()
     {
@@ -461,6 +488,7 @@ public partial class MainWindow : INotifyPropertyChanged
             SpeedDial.SetResultHighlight(true);
             BeginMiniGraphFadeOutAfterMeasurementComplete();
             UpdateDialProgressRingFromElapsed(duration, duration, forceFull: true);
+            PlayMeasureCompleteGlow();
         }
         catch (OperationCanceledException)
         {
