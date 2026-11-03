@@ -59,15 +59,23 @@
             </Setter>
         </Style>
 
-        <!-- Варианты длительности: выбранный яркий, остальные приглушённые. -->
+        <!-- Варианты длительности: выбранный яркий, остальные приглушённые; под мышью невыбранный светлеет — видно, что кликабелен. -->
         <Style x:Key="DurationChoiceRadioStyle"
                TargetType="RadioButton"
                BasedOn="{StaticResource ThemeRadioStyle}">
             <Setter Property="Opacity" Value="0.45"/>
+            <Setter Property="Cursor" Value="Hand"/>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
                     <Setter Property="Opacity" Value="1"/>
                 </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                        <Condition Property="IsChecked" Value="False"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Opacity" Value="0.8"/>
+                </MultiTrigger>
             </Style.Triggers>
         </Style>
 
@@ -356,6 +364,91 @@
                                                  GroupName="TrayClickPair"
                                                  Content="{DynamicResource Loc_SettingsWindow_TrayClickQuickSingleOpenDouble}"/>
                                 </StackPanel>
+                                <CheckBox x:Name="ShowRegionIconCheck"
+                                          Margin="0,14,0,8"
+                                          Content="{DynamicResource Loc_SettingsWindow_ShowRegionIcon}"
+                                          Checked="RegionOptions_OnChanged"
+                                          Unchecked="RegionOptions_OnChanged"/>
+                                <CheckBox x:Name="RegionEnhancedCheck"
+                                          Margin="24,0,0,8"
+                                          Content="{DynamicResource Loc_SettingsWindow_RegionEnhanced}"
+                                          ToolTipService.ShowDuration="60000">
+                                    <CheckBox.ToolTip>
+                                        <!-- Длинное пояснение: без явного TextBlock подсказка растянулась бы в одну строку. -->
+                                        <TextBlock MaxWidth="380"
+                                                   TextWrapping="Wrap"
+                                                   Text="{DynamicResource Loc_SettingsWindow_RegionEnhancedTooltip}"/>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                                <CheckBox x:Name="RegionAutoCheckCheck"
+                                          Margin="24,0,0,8"
+                                          Content="{DynamicResource Loc_SettingsWindow_RegionAutoCheck}"
+                                          Checked="RegionOptions_OnChanged"
+                                          Unchecked="RegionOptions_OnChanged"/>
+                                <Grid x:Name="RegionIntervalRow" Margin="24,0,0,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Rf.Text.Primary}"
+                                               Text="{DynamicResource Loc_SettingsWindow_RegionCheckInterval}"/>
+                                    <!-- Такой же счётчик, как у длительности замера. -->
+                                    <Border Grid.Column="1"
+                                            MinWidth="88"
+                                            Height="32"
+                                            VerticalAlignment="Center"
+                                            CornerRadius="6"
+                                            Background="{DynamicResource Rf.Surface}"
+                                            BorderBrush="{DynamicResource Rf.Border}"
+                                            BorderThickness="1"
+                                            SnapsToDevicePixels="True">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="22"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="RegionIntervalBox"
+                                                     Grid.Column="0"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     Padding="6,0,2,0"
+                                                     MinHeight="0"
+                                                     VerticalAlignment="Stretch"
+                                                     VerticalContentAlignment="Center"
+                                                     HorizontalContentAlignment="Center"
+                                                     MaxLength="4"
+                                                     ToolTip="{DynamicResource Loc_SettingsWindow_RegionCheckIntervalTooltip}"/>
+                                            <Border Grid.Column="1"
+                                                    BorderBrush="{DynamicResource Rf.Border}"
+                                                    BorderThickness="1,0,0,0"
+                                                    Margin="0,4,4,4">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="1"/>
+                                                        <RowDefinition Height="*"/>
+                                                    </Grid.RowDefinitions>
+                                                    <RepeatButton Grid.Row="0"
+                                                                  Content="▲"
+                                                                  Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                                  Click="RegionIntervalUp_OnClick"/>
+                                                    <Border Grid.Row="1"
+                                                            Background="{DynamicResource Rf.Border}"
+                                                            Height="1"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,-0.5,0,-0.5"/>
+                                                    <RepeatButton Grid.Row="2"
+                                                                  Content="▼"
+                                                                  Style="{StaticResource Rf.Settings.SpinnerRepeatInline}"
+                                                                  Click="RegionIntervalDown_OnClick"/>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
@@ -369,7 +462,13 @@
                                 <CheckBox x:Name="UseCustomSpeedTestUrlCheck"
                                           Margin="0,0,0,8"
                                           Checked="UseCustomSpeedTestUrlCheck_OnChecked"
-                                          Unchecked="UseCustomSpeedTestUrlCheck_OnChecked">
+                                          Unchecked="UseCustomSpeedTestUrlCheck_OnChecked"
+                                          ToolTipService.ShowDuration="60000">
+                                    <CheckBox.ToolTip>
+                                        <TextBlock MaxWidth="380"
+                                                   TextWrapping="Wrap"
+                                                   Text="{DynamicResource Loc_SettingsWindow_UseCustomSpeedTestUrlTooltip}"/>
+                                    </CheckBox.ToolTip>
                                     <TextBlock Text="{DynamicResource Loc_SettingsWindow_UseCustomSpeedTestUrl}"
                                                TextWrapping="Wrap">
                                         <TextBlock.Style>

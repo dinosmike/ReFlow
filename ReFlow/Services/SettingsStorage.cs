@@ -238,6 +238,7 @@ public static class SettingsStorage
         {
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(SettingsPath, SettingsFileHeaderLine + Environment.NewLine + json);
+            Saved?.Invoke(settings);
             return;
         }
 
@@ -248,7 +249,11 @@ public static class SettingsStorage
         };
         var outJson = root.ToJsonString(outOpts);
         File.WriteAllText(SettingsPath, SettingsFileHeaderLine + Environment.NewLine + outJson);
+        Saved?.Invoke(settings);
     }
+
+    /// <summary>Настройки записаны на диск (трей подхватывает, например, иконку региона).</summary>
+    public static event Action<AppSettings>? Saved;
 
     private static void MergeModelIntoExistingJson(JsonObject root, JsonObject model)
     {
@@ -449,5 +454,7 @@ public static class SettingsStorage
         s.Tray.SingleClickAction = s.Tray.ClickPairing == TrayClickPairing.WindowSingle_QuickTestDouble
             ? TrayIconClickAction.OpenWindow
             : TrayIconClickAction.QuickTest;
+
+        s.Tray.RegionCheckIntervalMinutes = Math.Clamp(s.Tray.RegionCheckIntervalMinutes, 1, 1440);
     }
 }

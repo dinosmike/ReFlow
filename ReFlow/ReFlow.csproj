@@ -25,7 +25,6 @@
 
   <ItemGroup>
     <Resource Include="app.ico" />
-    <Resource Include="Fonts\HelveticaInseratLTStd-Roman.otf" />
     <Resource Include="Fonts\RobotoCondensed-Bold.ttf" />
     <Resource Include="Fonts\segoeui.ttf" />
     <Resource Include="Fonts\segoeuib.ttf" />
@@ -34,6 +33,8 @@
     <Resource Include="Fonts\consolab.ttf" />
     <Resource Include="Fonts\SegMDL2.ttf" />
     <Resource Include="Assets\settings.svg" />
+    <!-- Квадратные флаги для иконки региона: flag-icons 1x1 (MIT, см. Flags\LICENSE-flag-icons.txt), PNG 64x64; правки — Flags\src-overrides. -->
+    <Resource Include="Flags\*.png" />
   </ItemGroup>
 
 </Project>

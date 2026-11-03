@@ -118,8 +118,14 @@ public static class AppIconFactory
         return IconFromBitmap(bmp);
     }
 
+    /// <summary>Высота полоски под цифрами: при иконке 16 px это ровно 1 экранный пиксел.</summary>
+    private const int TrayBottomBarPx = TrayGlyphSizePx / 16;
+
     /// <summary>Иконка трея с крупной цифрой: чёрный фон + текст по центру.</summary>
-    public static Icon CreateTrayGlyph(string text, Color fore)
+    public static Icon CreateTrayGlyph(string text, Color fore) => CreateTrayGlyph(text, fore, bottomBar: null);
+
+    /// <summary>То же, плюс тонкая полоска по нижней кромке (индикатор «замер идёт»).</summary>
+    public static Icon CreateTrayGlyph(string text, Color fore, Color? bottomBar)
     {
         text = (text ?? string.Empty).Trim();
         if (text.Length == 0)
@@ -147,9 +153,105 @@ public static class AppIconFactory
                 | System.Windows.Forms.TextFormatFlags.VerticalCenter
                 | System.Windows.Forms.TextFormatFlags.NoPadding
                 | System.Windows.Forms.TextFormatFlags.SingleLine);
+
+            if (bottomBar is { } barColor)
+            {
+                using var bar = new SolidBrush(barColor);
+                g.FillRectangle(bar, 0, TrayGlyphSizePx - TrayBottomBarPx, TrayGlyphSizePx, TrayBottomBarPx);
+            }
         }
 
         return IconFromBitmap(bmp);
+    }
+
+    /// <summary>
+    /// Иконка региона: квадратный флаг страны из встроенного набора (<c>Flags\xx.png</c>, flag-icons 1x1).
+    /// Нет флага — две буквы кода; <paramref name="countryCode"/> = null — «?».
+    /// <paramref name="dimmed"/> — бледный кадр для мигания во время проверки;
+    /// <paramref name="vpnBadge"/> — оранжевая точка в правом нижнем углу: обнаружен VPN.
+    /// </summary>
+    public static Icon CreateRegionIcon(string? countryCode, bool dimmed = false, bool vpnBadge = false)
+    {
+        using var bmp = new Bitmap(TrayGlyphSizePx, TrayGlyphSizePx, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Transparent);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            using var flag = TryLoadFlag(countryCode);
+            using var attrs = new ImageAttributes();
+            if (dimmed)
+                attrs.SetColorMatrix(new ColorMatrix { Matrix33 = 0.3f });
+
+            if (flag != null)
+            {
+                // Вписываем по ширине с сохранением пропорций, по центру по вертикали.
+                var w = TrayGlyphSizePx;
+                var h = Math.Min(TrayGlyphSizePx, (int)Math.Round(flag.Height * (double)w / flag.Width));
+                var y = (TrayGlyphSizePx - h) / 2;
+                g.DrawImage(flag, new Rectangle(0, y, w, h), 0, 0, flag.Width, flag.Height, GraphicsUnit.Pixel, attrs);
+            }
+            else
+            {
+                var text = string.IsNullOrWhiteSpace(countryCode) ? "?" : countryCode.Trim().ToUpperInvariant();
+                using var lettersBmp = new Bitmap(TrayGlyphSizePx, TrayGlyphSizePx, PixelFormat.Format32bppArgb);
+                using (var lg = Graphics.FromImage(lettersBmp))
+                {
+                    lg.Clear(Color.FromArgb(255, 40, 40, 40));
+                    lg.TextRenderingHint = TextRenderingHint.AntiAlias;
+                    float em = FindLargestFittingFontEm(lg, text, TrayGlyphSizePx);
+                    using var font = new Font(SegoeUiGdiFamily, em, FontStyle.Bold, GraphicsUnit.Pixel);
+                    System.Windows.Forms.TextRenderer.DrawText(
+                        lg,
+                        text,
+                        font,
+                        new Rectangle(0, 0, TrayGlyphSizePx, TrayGlyphSizePx),
+                        Color.White,
+                        System.Windows.Forms.TextFormatFlags.HorizontalCenter
+                        | System.Windows.Forms.TextFormatFlags.VerticalCenter
+                        | System.Windows.Forms.TextFormatFlags.NoPadding
+                        | System.Windows.Forms.TextFormatFlags.SingleLine);
+                }
+                g.DrawImage(lettersBmp, new Rectangle(0, 0, TrayGlyphSizePx, TrayGlyphSizePx),
+                    0, 0, TrayGlyphSizePx, TrayGlyphSizePx, GraphicsUnit.Pixel, attrs);
+            }
+
+            if (vpnBadge)
+            {
+                // Треть иконки: при 16 px это ~5 px — различимо, но флаг остаётся узнаваемым.
+                const int d = TrayGlyphSizePx * 3 / 8;
+                var rect = new Rectangle(TrayGlyphSizePx - d - 1, TrayGlyphSizePx - d - 1, d, d);
+                using var fill = new SolidBrush(dimmed ? Color.FromArgb(90, 255, 152, 0) : Color.FromArgb(255, 255, 152, 0));
+                using var ring = new Pen(Color.FromArgb(dimmed ? 90 : 255, 20, 20, 20), TrayGlyphSizePx / 16f);
+                g.FillEllipse(fill, rect);
+                g.DrawEllipse(ring, rect);
+            }
+        }
+
+        return IconFromBitmap(bmp);
+    }
+
+    private static Bitmap? TryLoadFlag(string? countryCode)
+    {
+        if (string.IsNullOrWhiteSpace(countryCode) || countryCode.Trim().Length != 2)
+            return null;
+        var code = countryCode.Trim().ToLowerInvariant();
+        try
+        {
+            var info = System.Windows.Application.GetResourceStream(
+                new Uri($"pack://application:,,,/Flags/{code}.png", UriKind.Absolute));
+            if (info?.Stream == null)
+                return null;
+            using (info.Stream)
+            using (var src = new Bitmap(info.Stream))
+                return new Bitmap(src); // копия: Bitmap держит поток, а поток закрываем
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private static float FindLargestFittingFontEm(Graphics g, string text, int boxPx)

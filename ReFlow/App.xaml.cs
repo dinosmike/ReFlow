@@ -119,6 +119,15 @@ public partial class App : System.Windows.Application
         var startupSettings = SettingsStorage.Load();
         AutostartService.SetEnabled(startupSettings.AutostartEnabled);
 
+        foreach (var arg in e.Args)
+        {
+            if (string.Equals(arg, "--simulate-offline", StringComparison.OrdinalIgnoreCase))
+            {
+                ConnectivityProbe.SimulateOffline = true;
+                break;
+            }
+        }
+
         // До показа главного окна нельзя использовать OnLastWindowClose: при первом запуске закрытие окна вопроса
         // (советы) сочтётся «последним окном» и процесс завершится до main.Show().
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -134,11 +143,12 @@ public partial class App : System.Windows.Application
         MainWindow = main;
         main.Show();
 
-        if (startupSettings.MinimizeToTrayOnStartup)
+        if (!ConnectivityProbe.SimulateOffline && startupSettings.MinimizeToTrayOnStartup)
             main.Hide();
 
         _tray = new TrayService(UiTheme.Dark);
-        _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
+        if (!ConnectivityProbe.SimulateOffline)
+            _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
         LocalizationService.LanguageChanged += OnLocalizationLanguageChanged;
     }
 

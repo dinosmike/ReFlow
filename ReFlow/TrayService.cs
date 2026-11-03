@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Globalization;
 using System.Net.Http;
 using System;
 using System.Collections.Generic;
@@ -19,13 +20,24 @@ public sealed class TrayService : IDisposable
     private static int SingleClickDelayMs =>
         Math.Clamp(SystemInformation.DoubleClickTime + 40, 200, 800);
 
+    /// <summary>Ритм мигания: черточка ожидания, полоска под цифрами, флаг во время проверки.</summary>
+    private static readonly TimeSpan BlinkInterval = TimeSpan.FromMilliseconds(200);
+
     private readonly NotifyIcon _notifyIcon;
+    /// <summary>Картинка основной иконки: ровная или мигающая.</summary>
+    private readonly TrayIconAnimator _iconAnim;
     /// <summary>WPF-диспетчер: WinForms <see cref="System.Windows.Forms.Timer"/> в чистом WPF часто не получает тики.</summary>
     private readonly DispatcherTimer _singleClickTimer;
+    private readonly Dispatcher _dispatcher;
     private readonly UiTheme _theme;
 
     private readonly HttpClient _http = new();
     private readonly SpeedTestService _speedTest;
+
+    /// <summary>Вторая иконка — флаг страны внешнего IP; создаётся при первом включении в настройках.</summary>
+    private NotifyIcon? _regionIcon;
+    private TrayIconAnimator? _regionAnim;
+    private RegionService? _region;
 
     private CancellationTokenSource? _quickTestCts;
 
@@ -47,6 +59,7 @@ public sealed class TrayService : IDisposable
         _speedTest = new SpeedTestService(_http);
 
         var disp = Application.Current?.Dispatcher ?? throw new InvalidOperationException("Application.Current is null.");
+        _dispatcher = disp;
         _singleClickTimer = new DispatcherTimer(DispatcherPriority.Normal, disp)
         {
             Interval = TimeSpan.FromMilliseconds(SingleClickDelayMs)
@@ -66,15 +79,43 @@ public sealed class TrayService : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = AppIconFactory.CreateTrayIcon(theme),
             Text = LocalizationService.T("Tray.BalloonTip"),
-            Visible = true
         };
+        _iconAnim = new TrayIconAnimator(_notifyIcon, disp, BlinkInterval);
+        _iconAnim.Show(AppIconFactory.CreateTrayIcon(theme));
+        _notifyIcon.Visible = true;
         // MouseUp + MouseClick: в разных версиях Windows для NotifyIcon приходит не всегда одно и то же.
         _notifyIcon.MouseUp += OnNotifyIconMouseUp;
         _notifyIcon.MouseClick += OnNotifyIconMouseClick;
         _notifyIcon.MouseDoubleClick += OnMouseDoubleClick;
 
+        _notifyIcon.ContextMenuStrip = CreateContextMenu();
+
+        SettingsStorage.Saved += OnSettingsSaved;
+        ApplyRegionSettings(SettingsStorage.Load());
+    }
+
+    /// <summary>Перерисовать иконку трея под выбранную тему (цвета как в UI).</summary>
+    public void RefreshIcon(UiTheme theme)
+    {
+        _iconAnim.Show(AppIconFactory.CreateTrayIcon(theme));
+    }
+
+    public void RefreshTexts()
+    {
+        _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
+        if (_notifyIcon.ContextMenuStrip != null)
+            RebuildContextMenu(_notifyIcon.ContextMenuStrip);
+        if (_regionIcon != null)
+        {
+            if (_regionIcon.ContextMenuStrip != null)
+                RebuildContextMenu(_regionIcon.ContextMenuStrip);
+            UpdateRegionTooltip();
+        }
+    }
+
+    private ContextMenuStrip CreateContextMenu()
+    {
         var menu = new ContextMenuStrip();
         menu.Opening += (_, _) =>
         {
@@ -88,22 +129,7 @@ public sealed class TrayService : IDisposable
             }
         };
         RebuildContextMenu(menu);
-        _notifyIcon.ContextMenuStrip = menu;
-    }
-
-    /// <summary>Перерисовать иконку трея под выбранную тему (цвета как в UI).</summary>
-    public void RefreshIcon(UiTheme theme)
-    {
-        var old = _notifyIcon.Icon;
-        _notifyIcon.Icon = AppIconFactory.CreateTrayIcon(theme);
-        old?.Dispose();
-    }
-
-    public void RefreshTexts()
-    {
-        _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-        if (_notifyIcon.ContextMenuStrip != null)
-            RebuildContextMenu(_notifyIcon.ContextMenuStrip);
+        return menu;
     }
 
     private void RebuildContextMenu(ContextMenuStrip menu)
@@ -115,6 +141,8 @@ public sealed class TrayService : IDisposable
             menu.Items.Add(LocalizationService.T("Tray.MenuStopQuickTest"), null, (_, _) => StopQuickTest());
         else
             menu.Items.Add(LocalizationService.T("Tray.MenuQuickTest"), null, (_, _) => StartQuickTest(restart: true));
+        if (_regionIcon is { Visible: true })
+            menu.Items.Add(LocalizationService.T("Tray.MenuCheckRegion"), null, (_, _) => CheckRegionNow());
         menu.Items.Add(LocalizationService.T("Tray.MenuSettings"), null, (_, _) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
 
@@ -261,6 +289,7 @@ public sealed class TrayService : IDisposable
 
     public void Dispose()
     {
+        SettingsStorage.Saved -= OnSettingsSaved;
         try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
         _quickTestCts?.Dispose();
         _http.Dispose();
@@ -269,7 +298,145 @@ public sealed class TrayService : IDisposable
         _notifyIcon.Visible = false;
         _notifyIcon.ContextMenuStrip?.Dispose();
         _notifyIcon.Dispose();
+        _iconAnim.Dispose();
+
+        _region?.Dispose();
+        if (_regionIcon != null)
+        {
+            _regionIcon.Visible = false;
+            _regionIcon.ContextMenuStrip?.Dispose();
+            _regionIcon.Dispose();
+        }
+        _regionAnim?.Dispose();
     }
+
+    // ---------- Иконка региона ----------
+
+    private void OnSettingsSaved(AppSettings settings) => InvokeOnUi(() => ApplyRegionSettings(settings));
+
+    private void ApplyRegionSettings(AppSettings settings)
+    {
+        var tray = settings.Tray;
+        if (!tray.ShowRegionIcon)
+        {
+            if (_regionIcon != null)
+                _regionIcon.Visible = false;
+            _region?.Configure(enabled: false, periodic: false, intervalMinutes: 0, enhanced: tray.RegionEnhanced);
+            return;
+        }
+
+        if (_regionIcon == null)
+        {
+            _region = new RegionService(_dispatcher);
+            _region.CheckStarted += OnRegionCheckStarted;
+            _region.CheckCompleted += OnRegionCheckCompleted;
+
+            _regionIcon = new NotifyIcon();
+            _regionAnim = new TrayIconAnimator(_regionIcon, _dispatcher, BlinkInterval);
+            _regionAnim.Show(AppIconFactory.CreateRegionIcon(null));
+            _regionIcon.ContextMenuStrip = CreateContextMenu();
+            // Левый клик по флагу — проверить регион сейчас.
+            _regionIcon.MouseClick += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                    CheckRegionNow();
+            };
+            UpdateRegionTooltip();
+        }
+
+        var wasVisible = _regionIcon.Visible;
+        _regionIcon.Visible = true;
+        _region!.Configure(enabled: true, tray.RegionAutoCheck, tray.RegionCheckIntervalMinutes, tray.RegionEnhanced);
+        if (!wasVisible)
+            CheckRegionNow();
+    }
+
+    private void CheckRegionNow()
+    {
+        if (_region == null)
+            return;
+        _ = _region.CheckNowAsync();
+    }
+
+    /// <summary>Сервисы отвечают за доли секунды — без минимума мигание не успело бы стать заметным.</summary>
+    private static readonly TimeSpan RegionBlinkMinDuration = TimeSpan.FromMilliseconds(1200);
+
+    private DateTime _regionCheckStartedUtc;
+    private int _regionCheckSeq;
+
+    private void OnRegionCheckStarted()
+    {
+        if (_regionAnim == null || _region == null)
+            return;
+        _regionCheckSeq++;
+        _regionCheckStartedUtc = DateTime.UtcNow;
+        var code = _region.CountryCode;
+        var vpn = _region.VpnDetected;
+        // Первый кадр — бледный: реакция на клик видна сразу.
+        _regionAnim.Blink(
+            "check|" + code + "|" + vpn,
+            () => AppIconFactory.CreateRegionIcon(code, dimmed: true, vpnBadge: vpn),
+            () => AppIconFactory.CreateRegionIcon(code, vpnBadge: vpn));
+        UpdateRegionTooltip();
+    }
+
+    private async void OnRegionCheckCompleted()
+    {
+        if (_regionAnim == null || _region == null)
+            return;
+        var seq = _regionCheckSeq;
+        var remaining = RegionBlinkMinDuration - (DateTime.UtcNow - _regionCheckStartedUtc);
+        if (remaining > TimeSpan.Zero)
+            await Task.Delay(remaining);
+        // За время паузы могла начаться новая проверка — тогда её мигание не трогаем.
+        if (seq != _regionCheckSeq || _region.IsChecking || _regionAnim == null)
+            return;
+        _regionAnim.Show(AppIconFactory.CreateRegionIcon(_region.CountryCode, vpnBadge: _region.VpnDetected));
+        UpdateRegionTooltip();
+    }
+
+    private void UpdateRegionTooltip()
+    {
+        if (_regionIcon == null)
+            return;
+        string text;
+        if (_region is { IsChecking: true })
+            text = LocalizationService.T("Tray.RegionChecking");
+        else if (_region?.CountryCode is not { } code)
+            text = LocalizationService.T("Tray.RegionUnknown");
+        else if (_region.VpnDetected && _region.RealCountryCode != null && _region.IpCountryCode != null)
+            text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("Tray.RegionVpn"),
+                CountryDisplayName(_region.RealCountryCode), CountryDisplayName(_region.IpCountryCode));
+        else if (_region.RealCheckFailed)
+            text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("Tray.RegionRealUnknown"),
+                CountryDisplayName(code));
+        else
+        {
+            var name = CountryDisplayName(code);
+            // RealCountryCode задан только после успешной проверки в усиленном режиме: VPN нет, страна подтверждена.
+            var key = _region.LastCheckFailed ? "Tray.RegionCheckFailed"
+                : _region.RealCountryCode != null ? "Tray.RegionTooltipEnhanced"
+                : "Tray.RegionTooltip";
+            text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T(key), name);
+        }
+
+        // NotifyIcon.Text ограничен 127 символами.
+        _regionIcon.Text = text.Length > 127 ? text[..127] : text;
+    }
+
+    private static string CountryDisplayName(string code)
+    {
+        try
+        {
+            return new RegionInfo(code).DisplayName + " (" + code + ")";
+        }
+        catch (ArgumentException)
+        {
+            return code;
+        }
+    }
+
+    // ---------- Быстрый замер ----------
 
     private void StartQuickTest(bool restart)
     {
@@ -295,13 +462,34 @@ public sealed class TrayService : IDisposable
         var gen = ++_quickTestGeneration;
         var samples = new List<double>();
 
-        InvokeOnUi(() => SetBaseIcon());
+        // Реакция на клик сразу, не дожидаясь первого пробника (он может висеть до таймаута).
+        InvokeOnUi(() => BlinkDash(ConnectivityProbe.IsNetworkLikelyDown ? Color.Red : Color.LimeGreen));
 
         _ = Task.Run(async () =>
         {
             try
             {
                 var dlBase = new Uri(fileUrlRaw, UriKind.Absolute);
+
+                await ConnectivityProbe.WaitUntilReachableAsync(
+                    dlBase,
+                    () => InvokeOnUi(() =>
+                    {
+                        if (gen != _quickTestGeneration || _quickTestUiSealedGeneration == gen)
+                            return;
+                        BlinkDash(Color.Red);
+                        _notifyIcon.Text = LocalizationService.T("Tray.WaitingForNetwork");
+                    }),
+                    ct).ConfigureAwait(false);
+
+                InvokeOnUi(() =>
+                {
+                    if (gen != _quickTestGeneration || _quickTestUiSealedGeneration == gen)
+                        return;
+                    // Сервер доступен — до первых цифр мигает зелёная черточка.
+                    BlinkDash(Color.LimeGreen);
+                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
+                });
 
                 var duration = TimeSpan.FromSeconds(Math.Clamp(settings.SpeedTestDurationSeconds, 1, 600));
                 var options = new SpeedTestOptions
@@ -322,6 +510,7 @@ public sealed class TrayService : IDisposable
                     var peakMbps = samples.Count > 0 ? samples.Max() : result.Download.AverageMbps;
                     _quickTestUiSealedGeneration = gen;
                     ShowFinalMaxMbps(peakMbps);
+                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
                     FinalizeQuickTestIfCurrent(gen, cts);
                 });
             }
@@ -333,6 +522,7 @@ public sealed class TrayService : IDisposable
                         return;
                     _quickTestUiSealedGeneration = gen;
                     RestoreLastQuickTestGlyphOrBase();
+                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
                     FinalizeQuickTestIfCurrent(gen, cts);
                 });
             }
@@ -344,6 +534,7 @@ public sealed class TrayService : IDisposable
                         return;
                     _quickTestUiSealedGeneration = gen;
                     RestoreLastQuickTestGlyphOrBase();
+                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
                     FinalizeQuickTestIfCurrent(gen, cts);
                 });
                 LogTrayException("QuickTest");
@@ -390,7 +581,20 @@ public sealed class TrayService : IDisposable
 
         samples.Add(p.Mbps.Value);
         var text = Math.Round(p.Mbps.Value).ToString("0");
-        SetGlyph(text, Color.Red);
+        // Цифры горят ровно, мигает только полоска по нижней кромке — «замер ещё идёт».
+        _iconAnim.Blink(
+            "rate|" + text,
+            () => AppIconFactory.CreateTrayGlyph(text, Color.LimeGreen, bottomBar: Color.LimeGreen),
+            () => AppIconFactory.CreateTrayGlyph(text, Color.LimeGreen));
+    }
+
+    /// <summary>Черточка мигает целиком: ждём сеть (красная) или подключаемся (зелёная).</summary>
+    private void BlinkDash(Color color)
+    {
+        _iconAnim.Blink(
+            "dash|" + color.ToArgb(),
+            () => AppIconFactory.CreateTrayGlyph("–", color),
+            () => AppIconFactory.CreateTrayGlyph("–", Color.Black));
     }
 
     private void ShowFinalMaxMbps(double maxMbps)
@@ -408,17 +612,7 @@ public sealed class TrayService : IDisposable
             SetBaseIcon();
     }
 
-    private void SetGlyph(string text, Color color)
-    {
-        var old = _notifyIcon.Icon;
-        _notifyIcon.Icon = AppIconFactory.CreateTrayGlyph(text, color);
-        old?.Dispose();
-    }
+    private void SetGlyph(string text, Color color) => _iconAnim.Show(AppIconFactory.CreateTrayGlyph(text, color));
 
-    private void SetBaseIcon()
-    {
-        var old = _notifyIcon.Icon;
-        _notifyIcon.Icon = AppIconFactory.CreateTrayIcon(_theme);
-        old?.Dispose();
-    }
+    private void SetBaseIcon() => _iconAnim.Show(AppIconFactory.CreateTrayIcon(_theme));
 }

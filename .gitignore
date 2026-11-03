@@ -33,3 +33,6 @@ speedtest.bin
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Speed test payload (lives on hosting only; see generate-speedtest-file.bat)
+*.bin

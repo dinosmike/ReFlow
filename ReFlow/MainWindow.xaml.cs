@@ -32,6 +32,8 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private static readonly SolidColorBrush SpeedStatsMaxCompleteBrush = FreezeBrush("#44b759");
     private static readonly SolidColorBrush SpeedStatsAvgCompleteBrush = FreezeBrush("#b7b044");
+    private static readonly SolidColorBrush DialOutlineMeasureBrush = FreezeBrush("#68e2cf");
+    private static readonly SolidColorBrush DialOutlineOfflineBrush = FreezeBrush("#E23B3B");
 
     private static SolidColorBrush FreezeBrush(string hex)
     {
@@ -51,6 +53,16 @@ public partial class MainWindow : INotifyPropertyChanged
     /// <summary>Периметр скруглённого прямоугольника (fallback, если не удалось снять длину с геометрии).</summary>
     private static double RoundedRectPerimeter(double w, double h, double r) =>
         2 * (w - 2 * r) + 2 * (h - 2 * r) + 2 * Math.PI * r;
+
+    /// <summary>Периметр контура в тех же единицах, что геометрия циферблата — полный круг ожидания ровно за интервал пробника.</summary>
+    private static double DialOutlineAnalyticalPerimeter()
+    {
+        var inset = DialProgressGeometryInset;
+        var wIn = DialOutlineWidth - 2 * inset;
+        var hIn = DialOutlineHeight - 2 * inset;
+        var rIn = Math.Max(0, DialCornerRadius - inset);
+        return RoundedRectPerimeter(wIn, hIn, rIn);
+    }
 
     /// <summary>
     /// Внутрь от внешней границы циферблата: центр линии прогресса не совпадает с <c>Border</c> рамки (1.5),
@@ -156,6 +168,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private double _dialRingPathLength = 1;
     private TimeSpan _dialRingDuration;
     private Stopwatch? _dialRingUiSw;
+    /// <summary>Красная обводка ожидания сети: заполнение по кругу зациклено, не привязано к длительности замера.</summary>
+    private bool _dialRingWaiting;
 
     private void PlayMeasureCompleteGlow()
     {
@@ -198,27 +212,28 @@ public partial class MainWindow : INotifyPropertyChanged
         TaskbarInfo.ProgressValue = Math.Clamp(t, 0, 1);
     }
 
+    private void EnsureDialOutlinePathMetrics()
+    {
+        var geo = DialProgressOutline.Data as PathGeometry ?? CreateSpeedDialOutlineGeometry();
+        if (DialProgressOutline.Data is not PathGeometry)
+            DialProgressOutline.Data = geo;
+
+        var analytical = DialOutlineAnalyticalPerimeter();
+        _dialRingPathLength = CoerceOutlineStrokeLength(geo, analytical);
+    }
+
     private void BeginDialProgressRing(TimeSpan totalDuration)
     {
         StopDialRingUiTimer();
 
         _dialRingDuration = totalDuration <= TimeSpan.Zero ? TimeSpan.FromSeconds(1) : totalDuration;
-
-        var geo = DialProgressOutline.Data as PathGeometry ?? CreateSpeedDialOutlineGeometry();
-        if (DialProgressOutline.Data is not PathGeometry)
-            DialProgressOutline.Data = geo;
-
-        var inset = DialProgressGeometryInset;
-        var wIn = DialOutlineWidth - 2 * inset;
-        var hIn = DialOutlineHeight - 2 * inset;
-        var rIn = Math.Max(0, DialCornerRadius - inset);
-        var analytical = RoundedRectPerimeter(wIn, hIn, rIn);
-        _dialRingPathLength = CoerceOutlineStrokeLength(geo, analytical);
+        EnsureDialOutlinePathMetrics();
 
         // Прогресс — длина первого штриха [0..len], offset=0: доля времени линейна по длине нарисованного контура.
         // Сдвиг offset при штрихе ≈ периметра на замкнутом Path даёт преждевременное визуальное замыкание.
         DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
         DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
+        DialProgressOutline.Stroke = DialOutlineMeasureBrush;
         DialProgressOutline.StrokeDashOffset = 0;
         DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
         DialProgressOutline.Visibility = Visibility.Visible;
@@ -234,6 +249,12 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         if (_dialRingUiSw is null || DialProgressOutline.Visibility != Visibility.Visible)
             return;
+        if (_dialRingWaiting)
+        {
+            UpdateWaitingDialOutlineFromElapsed(_dialRingUiSw.Elapsed);
+            return;
+        }
+
         UpdateDialProgressRingFromElapsed(_dialRingUiSw.Elapsed, _dialRingDuration);
     }
 
@@ -241,6 +262,7 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         CompositionTarget.Rendering -= OnDialRingRendering;
         _dialRingUiSw = null;
+        _dialRingWaiting = false;
     }
 
     /// <summary>Доля контура по прошедшему времени; во время замера вызывается из <see cref="OnDialRingRendering"/>.</summary>
@@ -272,8 +294,64 @@ public partial class MainWindow : INotifyPropertyChanged
         DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
         DialProgressOutline.StrokeDashOffset = 0;
         DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
+        DialProgressOutline.Stroke = DialOutlineMeasureBrush;
         DialProgressOutline.Visibility = Visibility.Collapsed;
         ClearTaskbarProgress();
+    }
+
+    /// <summary>Красная обводка ожидания: тот же ход, что у замера, но круг за кругом, пока нет сети.</summary>
+    private void ShowOfflineDialOutline()
+    {
+        StopDialRingUiTimer();
+        EnsureDialOutlinePathMetrics();
+        _dialRingPathLength = DialOutlineAnalyticalPerimeter();
+
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+        DialProgressOutline.BeginAnimation(Shape.StrokeDashArrayProperty, null);
+        DialProgressOutline.Stroke = DialOutlineOfflineBrush;
+        DialProgressOutline.StrokeDashOffset = 0;
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { 0, 1_000_000 };
+        DialProgressOutline.Visibility = Visibility.Visible;
+
+        _dialRingWaiting = true;
+        _dialRingUiSw = Stopwatch.StartNew();
+        CompositionTarget.Rendering += OnDialRingRendering;
+
+        if (TaskbarInfo != null)
+        {
+            TaskbarInfo.ProgressState = TaskbarItemProgressState.Error;
+            TaskbarInfo.ProgressValue = 1;
+        }
+    }
+
+    private void UpdateWaitingDialOutlineFromElapsed(TimeSpan elapsed)
+    {
+        if (_dialRingPathLength <= 0 || ConnectivityProbe.RetryInterval <= TimeSpan.Zero)
+            return;
+
+        var periodTicks = ConnectivityProbe.RetryInterval.Ticks;
+        double t;
+        if (elapsed.Ticks <= 0)
+        {
+            t = 0;
+        }
+        else
+        {
+            var cycle = elapsed.Ticks % periodTicks;
+            // Ровно на границе круга показываем полный контур, затем следующий круг с нуля.
+            t = cycle == 0 ? 1.0 : cycle / (double)periodTicks;
+        }
+
+        var lit = Math.Clamp(_dialRingPathLength * t, 0, _dialRingPathLength);
+        DialProgressOutline.StrokeDashOffset = 0;
+        DialProgressOutline.StrokeDashArray = new DoubleCollection { lit, 1_000_000 };
+    }
+
+    private void EnterWaitingForNetworkUi()
+    {
+        _sessionWaitingForNetwork = true;
+        ShowOfflineDialOutline();
+        UpdateSpeedStatsLine();
     }
 
     /// <summary>Останавливает анимацию по времени; контур остаётся на экране до следующего замера.</summary>
@@ -327,6 +405,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private double _sessionAverageMbps;
     /// <summary>Идёт активный замер: средняя — плейсхолдер; иначе (покой) — «0 Мбит/с», если нет сохранённого результата.</summary>
     private bool _sessionMeasuring;
+    /// <summary>Старт нажат, сервер замера недоступен — красная обводка, повтор пробника.</summary>
+    private bool _sessionWaitingForNetwork;
 
     internal static int TooltipInitialShowDelayMs { get; private set; }
 
@@ -448,7 +528,6 @@ public partial class MainWindow : INotifyPropertyChanged
         _lastDialSpeed = -1;
         SpeedDial.SetValueSilent(0);
         ResetSessionSpeedStats();
-        _sessionMeasuring = true;
         UpdateSpeedStatsLine();
 
         StartStopText = "Стоп";
@@ -458,8 +537,16 @@ public partial class MainWindow : INotifyPropertyChanged
         try
         {
             var duration = TimeSpan.FromSeconds(Math.Clamp(s.SpeedTestDurationSeconds, 1, 600));
-            BeginDialProgressRing(duration);
             var dlBase = new Uri(fileUrlRaw, UriKind.Absolute);
+            await ConnectivityProbe.WaitUntilReachableAsync(
+                dlBase,
+                () => Dispatcher.Invoke(EnterWaitingForNetworkUi),
+                ct);
+
+            _sessionWaitingForNetwork = false;
+            _sessionMeasuring = true;
+            UpdateSpeedStatsLine();
+            BeginDialProgressRing(duration);
             var options = new SpeedTestOptions
             {
                 Duration = duration,
@@ -513,6 +600,7 @@ public partial class MainWindow : INotifyPropertyChanged
         finally
         {
             StopDialRingSmoothingAfterMeasure();
+            _sessionWaitingForNetwork = false;
             _sessionMeasuring = false;
             _speedTestCts?.Dispose();
             _speedTestCts = null;
@@ -765,7 +853,10 @@ public partial class MainWindow : INotifyPropertyChanged
         ClampWindowToWorkArea();
         RedrawMiniGraph();
         UpdateSpeedStatsLine();
-        TryInitialWindowOpenAutoMeasure();
+        if (ConnectivityProbe.SimulateOffline)
+            _ = TryStartSpeedTestAsync(showMissingUrlMessage: false);
+        else
+            TryInitialWindowOpenAutoMeasure();
     }
 
     private void OnLocalizationLanguageChanged()
@@ -777,6 +868,7 @@ public partial class MainWindow : INotifyPropertyChanged
     private void ResetSessionSpeedStats()
     {
         _sessionMeasuring = false;
+        _sessionWaitingForNetwork = false;
         _sessionMaxMbps = 0;
         _sessionRateSamples.Clear();
         _sessionAverageKnown = false;
@@ -787,6 +879,14 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private void UpdateSpeedStatsLine()
     {
+        if (_sessionWaitingForNetwork)
+        {
+            SpeedStatsLine.Inlines.Clear();
+            SpeedStatsLine.Foreground = DialOutlineOfflineBrush;
+            SpeedStatsLine.Text = LocalizationService.T("MainWindow.WaitingForNetwork");
+            return;
+        }
+
         var unit = LocalizationService.T("MainWindow.SpeedStatsUnit");
         var maxStr = Math.Round(Math.Max(0, _sessionMaxMbps)).ToString("0", CultureInfo.InvariantCulture);
         string avgContent;
@@ -842,6 +942,55 @@ public partial class MainWindow : INotifyPropertyChanged
         ClampWindowToWorkArea();
 
         UpdateSpeedStatsLine();
+        UpdateSpeedTestDomainLine();
+    }
+
+    private static string? TryGetMainDomainFromUrl(string? urlRaw)
+    {
+        if (string.IsNullOrWhiteSpace(urlRaw))
+            return null;
+
+        var raw = urlRaw.Trim();
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri)
+            && !Uri.TryCreate("https://" + raw, UriKind.Absolute, out uri))
+            return null;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return null;
+
+        var host = uri.Host;
+        if (string.IsNullOrWhiteSpace(host))
+            return null;
+
+        if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+            host = host[4..];
+
+        return host;
+    }
+
+    private void UpdateSpeedTestDomainLine()
+    {
+        if (SpeedTestDomainLine == null)
+            return;
+
+        if (!_settings.SpeedTest.UseCustomDownloadFileUrl
+            || string.IsNullOrWhiteSpace(_settings.SpeedTest.DownloadFileUrl))
+        {
+            SpeedTestDomainLine.Visibility = Visibility.Collapsed;
+            SpeedTestDomainLine.Text = "";
+            return;
+        }
+
+        var domain = TryGetMainDomainFromUrl(_settings.SpeedTest.DownloadFileUrl);
+        if (string.IsNullOrWhiteSpace(domain))
+        {
+            SpeedTestDomainLine.Visibility = Visibility.Collapsed;
+            SpeedTestDomainLine.Text = "";
+            return;
+        }
+
+        SpeedTestDomainLine.Text = domain;
+        SpeedTestDomainLine.Visibility = Visibility.Visible;
     }
 
     private static bool TryGetWindowSizeForPlacement(Window window, out double w, out double h)

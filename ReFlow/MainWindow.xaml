@@ -173,12 +173,11 @@
                                               SpeedMbps="{Binding CurrentMbps}"/>
                     </StackPanel>
 
+                    <StackPanel Grid.Row="1"
+                                HorizontalAlignment="Center"
+                                Margin="0,13,0,0">
                     <!-- График совпадает по габаритам с кнопкой, линия поверх (клики в кнопку) -->
-                    <Grid Grid.Row="1"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Top"
-                          Margin="0,13,0,0"
-                          Width="300"
+                    <Grid Width="300"
                           Height="54"
                           ClipToBounds="False">
                         <Button x:Name="BtnStartStop"
@@ -247,7 +246,22 @@
                             </Canvas>
                         </Border>
                     </Grid>
+                    </StackPanel>
                 </Grid>
+                <!-- В нижнем отступе окна (Margin снизу), без увеличения высоты SizeToContent -->
+                <TextBlock x:Name="SpeedTestDomainLine"
+                           Panel.ZIndex="11"
+                           VerticalAlignment="Bottom"
+                           HorizontalAlignment="Center"
+                           FontSize="11"
+                           Foreground="{DynamicResource Rf.Text.Muted}"
+                           TextAlignment="Center"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="300"
+                           Margin="0,0,0,-31"
+                           IsHitTestVisible="False"
+                           Visibility="Collapsed"/>
             </Grid>
         </DockPanel>
     </Border>

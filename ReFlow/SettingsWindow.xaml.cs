@@ -400,6 +400,25 @@ public partial class SettingsWindow
             TrayPairOpenSingle.IsChecked = true;
         else
             TrayPairQuickSingle.IsChecked = true;
+
+        ShowRegionIconCheck.IsChecked = settings.Tray.ShowRegionIcon;
+        RegionAutoCheckCheck.IsChecked = settings.Tray.RegionAutoCheck;
+        RegionEnhancedCheck.IsChecked = settings.Tray.RegionEnhanced;
+        RegionIntervalBox.Text = settings.Tray.RegionCheckIntervalMinutes.ToString(CultureInfo.InvariantCulture);
+        UpdateRegionOptionsEnabled();
+    }
+
+    private void RegionOptions_OnChanged(object sender, RoutedEventArgs e) => UpdateRegionOptionsEnabled();
+
+    /// <summary>Периодичность имеет смысл только при включённой иконке, интервал — только при включённой периодичности.</summary>
+    private void UpdateRegionOptionsEnabled()
+    {
+        if (ShowRegionIconCheck == null || RegionAutoCheckCheck == null || RegionIntervalRow == null || RegionEnhancedCheck == null)
+            return;
+        var iconOn = ShowRegionIconCheck.IsChecked == true;
+        RegionEnhancedCheck.IsEnabled = iconOn;
+        RegionAutoCheckCheck.IsEnabled = iconOn;
+        RegionIntervalRow.IsEnabled = iconOn && RegionAutoCheckCheck.IsChecked == true;
     }
 
     private void Save_OnClick(object sender, RoutedEventArgs e)
@@ -457,6 +476,12 @@ public partial class SettingsWindow
 
         _settings.SpeedTest.AutoStartWhenWindowOpen = AutoMeasureOnWindowOpenCheck.IsChecked == true;
         _settings.SpeedTest.AutoStartOnTrayStartup = AutoMeasureTrayStartupCheck.IsChecked == true;
+
+        _settings.Tray.ShowRegionIcon = ShowRegionIconCheck.IsChecked == true;
+        _settings.Tray.RegionAutoCheck = RegionAutoCheckCheck.IsChecked == true;
+        _settings.Tray.RegionEnhanced = RegionEnhancedCheck.IsChecked == true;
+        if (int.TryParse(RegionIntervalBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var regionMin) && regionMin >= 1)
+            _settings.Tray.RegionCheckIntervalMinutes = Math.Min(regionMin, 1440);
 
         AutostartService.SetEnabled(_settings.AutostartEnabled);
 
@@ -624,5 +649,17 @@ public partial class SettingsWindow
             v = 10;
         v = Math.Clamp(v + delta, 1, 600);
         DurationSecondsBox.Text = v.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void RegionIntervalUp_OnClick(object sender, RoutedEventArgs e) => BumpRegionIntervalMinutes(1);
+
+    private void RegionIntervalDown_OnClick(object sender, RoutedEventArgs e) => BumpRegionIntervalMinutes(-1);
+
+    private void BumpRegionIntervalMinutes(int delta)
+    {
+        if (!int.TryParse(RegionIntervalBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+            v = _settings.Tray.RegionCheckIntervalMinutes;
+        v = Math.Clamp(v + delta, 1, 1440);
+        RegionIntervalBox.Text = v.ToString(CultureInfo.InvariantCulture);
     }
 }
