@@ -863,6 +863,116 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         ApplyCloseButtonAppearance();
         UpdateSpeedStatsLine();
+        UpdateRegionLine();
+    }
+
+    // ---------- Регион над табло ----------
+
+    private RegionService? _region;
+    private DispatcherTimer? _regionBlinkTimer;
+    private DateTime _regionCheckStartedUtc;
+    private int _regionCheckSeq;
+    /// <summary>Как у иконки в трее: быстрый ответ всё равно даёт заметное мигание.</summary>
+    private static readonly TimeSpan RegionBlinkMinDuration = TimeSpan.FromMilliseconds(1200);
+
+    /// <summary>Подключить строку региона к общей проверке (её запускает трей при старте).</summary>
+    internal void AttachRegion(RegionService region)
+    {
+        _region = region;
+        _regionBlinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _regionBlinkTimer.Tick += (_, _) => RegionFlagImage.Opacity = RegionFlagImage.Opacity < 1 ? 1 : 0.3;
+        region.CheckStarted += OnRegionCheckStarted;
+        region.CheckCompleted += OnRegionCheckCompleted;
+        SettingsStorage.Saved += OnSettingsSavedForRegion;
+        Closed += (_, _) =>
+        {
+            region.CheckStarted -= OnRegionCheckStarted;
+            region.CheckCompleted -= OnRegionCheckCompleted;
+            SettingsStorage.Saved -= OnSettingsSavedForRegion;
+            _regionBlinkTimer.Stop();
+        };
+        ApplyRegionLineVisibility(SettingsStorage.Load());
+        if (region.IsChecking)
+            OnRegionCheckStarted();
+        else
+            UpdateRegionLine();
+    }
+
+    private void OnSettingsSavedForRegion(AppSettings settings) =>
+        Dispatcher.InvokeAsync(() => ApplyRegionLineVisibility(settings));
+
+    private void ApplyRegionLineVisibility(AppSettings settings) =>
+        RegionLine.Visibility = settings.Tray.ShowRegionInWindow ? Visibility.Visible : Visibility.Hidden;
+
+    private void OnRegionCheckStarted()
+    {
+        _regionCheckSeq++;
+        _regionCheckStartedUtc = DateTime.UtcNow;
+        RegionFlagImage.Opacity = 0.3;
+        _regionBlinkTimer?.Start();
+        UpdateRegionLine(checking: true);
+    }
+
+    private async void OnRegionCheckCompleted()
+    {
+        var seq = _regionCheckSeq;
+        var remaining = RegionBlinkMinDuration - (DateTime.UtcNow - _regionCheckStartedUtc);
+        if (remaining > TimeSpan.Zero)
+            await Task.Delay(remaining);
+        if (seq != _regionCheckSeq || _region is null or { IsChecking: true })
+            return;
+        _regionBlinkTimer?.Stop();
+        RegionFlagImage.Opacity = 1;
+        UpdateRegionLine();
+    }
+
+    private void UpdateRegionLine(bool? checking = null)
+    {
+        if (_region == null)
+            return;
+        var isChecking = checking ?? (_regionBlinkTimer?.IsEnabled == true);
+        var code = _region.CountryCode;
+
+        RegionFlagImage.Source = code != null ? TryLoadRegionFlag(code) : null;
+        RegionUnknownMark.Visibility = code != null && RegionFlagImage.Source != null ? Visibility.Collapsed : Visibility.Visible;
+        RegionVpnDot.Visibility = _region.VpnDetected ? Visibility.Visible : Visibility.Collapsed;
+
+        string text;
+        if (isChecking)
+            text = LocalizationService.T("MainWindow.RegionChecking");
+        else if (code == null)
+            text = LocalizationService.T("MainWindow.RegionUnknown");
+        else if (_region.VpnDetected && _region.RealCountryCode != null && _region.IpCountryCode != null)
+            text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.RegionVpn"),
+                RegionService.CountryName(_region.RealCountryCode), RegionService.CountryName(_region.IpCountryCode));
+        else if (_region.RealCheckFailed)
+            text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.RegionRealUnknown"),
+                RegionService.CountryName(code));
+        else
+        {
+            var name = RegionService.CountryName(code);
+            text = _region.LastCheckFailed
+                ? string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.RegionCheckFailed"), name)
+                : _region.RealCountryCode != null
+                    ? string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.RegionEnhanced"), name)
+                    : name;
+        }
+        RegionCaption.Text = text;
+    }
+
+    private static ImageSource? TryLoadRegionFlag(string code)
+    {
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage(
+                new Uri($"pack://application:,,,/Flags/{code.ToLowerInvariant()}.png", UriKind.Absolute));
+            bmp.Freeze();
+            return bmp;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private void ResetSessionSpeedStats()

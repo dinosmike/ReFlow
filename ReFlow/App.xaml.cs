@@ -147,6 +147,7 @@ public partial class App : System.Windows.Application
             main.Hide();
 
         _tray = new TrayService(UiTheme.Dark);
+        main.AttachRegion(_tray.Region);
         if (!ConnectivityProbe.SimulateOffline)
             _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
         LocalizationService.LanguageChanged += OnLocalizationLanguageChanged;

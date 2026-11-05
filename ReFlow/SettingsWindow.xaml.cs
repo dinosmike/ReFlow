@@ -401,6 +401,7 @@ public partial class SettingsWindow
         else
             TrayPairQuickSingle.IsChecked = true;
 
+        ShowRegionInWindowCheck.IsChecked = settings.Tray.ShowRegionInWindow;
         ShowRegionIconCheck.IsChecked = settings.Tray.ShowRegionIcon;
         RegionAutoCheckCheck.IsChecked = settings.Tray.RegionAutoCheck;
         RegionEnhancedCheck.IsChecked = settings.Tray.RegionEnhanced;
@@ -413,10 +414,11 @@ public partial class SettingsWindow
     /// <summary>Периодичность имеет смысл только при включённой иконке, интервал — только при включённой периодичности.</summary>
     private void UpdateRegionOptionsEnabled()
     {
-        if (ShowRegionIconCheck == null || RegionAutoCheckCheck == null || RegionIntervalRow == null || RegionEnhancedCheck == null)
+        if (ShowRegionIconCheck == null || ShowRegionInWindowCheck == null || RegionAutoCheckCheck == null || RegionIntervalRow == null || RegionEnhancedCheck == null)
             return;
+        // Усиленный режим — для окна и трея; проверка по таймеру — только для иконки в трее.
         var iconOn = ShowRegionIconCheck.IsChecked == true;
-        RegionEnhancedCheck.IsEnabled = iconOn;
+        RegionEnhancedCheck.IsEnabled = iconOn || ShowRegionInWindowCheck.IsChecked == true;
         RegionAutoCheckCheck.IsEnabled = iconOn;
         RegionIntervalRow.IsEnabled = iconOn && RegionAutoCheckCheck.IsChecked == true;
     }
@@ -477,6 +479,7 @@ public partial class SettingsWindow
         _settings.SpeedTest.AutoStartWhenWindowOpen = AutoMeasureOnWindowOpenCheck.IsChecked == true;
         _settings.SpeedTest.AutoStartOnTrayStartup = AutoMeasureTrayStartupCheck.IsChecked == true;
 
+        _settings.Tray.ShowRegionInWindow = ShowRegionInWindowCheck.IsChecked == true;
         _settings.Tray.ShowRegionIcon = ShowRegionIconCheck.IsChecked == true;
         _settings.Tray.RegionAutoCheck = RegionAutoCheckCheck.IsChecked == true;
         _settings.Tray.RegionEnhanced = RegionEnhancedCheck.IsChecked == true;

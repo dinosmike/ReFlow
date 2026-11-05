@@ -37,7 +37,11 @@ public sealed class TrayService : IDisposable
     /// <summary>Вторая иконка — флаг страны внешнего IP; создаётся при первом включении в настройках.</summary>
     private NotifyIcon? _regionIcon;
     private TrayIconAnimator? _regionAnim;
-    private RegionService? _region;
+    /// <summary>Проверка региона работает всегда: флаг показан и в главном окне, независимо от иконки в трее.</summary>
+    private readonly RegionService _region;
+    private bool _regionStarted;
+
+    public RegionService Region => _region;
 
     private CancellationTokenSource? _quickTestCts;
 
@@ -90,6 +94,10 @@ public sealed class TrayService : IDisposable
         _notifyIcon.MouseDoubleClick += OnMouseDoubleClick;
 
         _notifyIcon.ContextMenuStrip = CreateContextMenu();
+
+        _region = new RegionService(disp);
+        _region.CheckStarted += OnRegionCheckStarted;
+        _region.CheckCompleted += OnRegionCheckCompleted;
 
         SettingsStorage.Saved += OnSettingsSaved;
         ApplyRegionSettings(SettingsStorage.Load());
@@ -300,7 +308,7 @@ public sealed class TrayService : IDisposable
         _notifyIcon.Dispose();
         _iconAnim.Dispose();
 
-        _region?.Dispose();
+        _region.Dispose();
         if (_regionIcon != null)
         {
             _regionIcon.Visible = false;
@@ -317,23 +325,30 @@ public sealed class TrayService : IDisposable
     private void ApplyRegionSettings(AppSettings settings)
     {
         var tray = settings.Tray;
+        // Страна не показана ни в окне, ни в трее — не проверяем вовсе; при включении — сразу свежая проверка.
+        var regionOn = tray.ShowRegionIcon || tray.ShowRegionInWindow;
+        // Проверка по таймеру — настройка иконки в трее; без неё страна проверяется при запуске и при смене сети.
+        _region.Configure(regionOn, tray.ShowRegionIcon && tray.RegionAutoCheck, tray.RegionCheckIntervalMinutes, tray.RegionEnhanced);
+        if (!regionOn)
+            _regionStarted = false;
+        else if (!_regionStarted)
+        {
+            _regionStarted = true;
+            CheckRegionNow();
+        }
+
         if (!tray.ShowRegionIcon)
         {
             if (_regionIcon != null)
                 _regionIcon.Visible = false;
-            _region?.Configure(enabled: false, periodic: false, intervalMinutes: 0, enhanced: tray.RegionEnhanced);
             return;
         }
 
         if (_regionIcon == null)
         {
-            _region = new RegionService(_dispatcher);
-            _region.CheckStarted += OnRegionCheckStarted;
-            _region.CheckCompleted += OnRegionCheckCompleted;
-
             _regionIcon = new NotifyIcon();
             _regionAnim = new TrayIconAnimator(_regionIcon, _dispatcher, BlinkInterval);
-            _regionAnim.Show(AppIconFactory.CreateRegionIcon(null));
+            _regionAnim.Show(AppIconFactory.CreateRegionIcon(_region.CountryCode, vpnBadge: _region.VpnDetected));
             _regionIcon.ContextMenuStrip = CreateContextMenu();
             // Левый клик по флагу — проверить регион сейчас.
             _regionIcon.MouseClick += (_, e) =>
@@ -344,19 +359,10 @@ public sealed class TrayService : IDisposable
             UpdateRegionTooltip();
         }
 
-        var wasVisible = _regionIcon.Visible;
         _regionIcon.Visible = true;
-        _region!.Configure(enabled: true, tray.RegionAutoCheck, tray.RegionCheckIntervalMinutes, tray.RegionEnhanced);
-        if (!wasVisible)
-            CheckRegionNow();
     }
 
-    private void CheckRegionNow()
-    {
-        if (_region == null)
-            return;
-        _ = _region.CheckNowAsync();
-    }
+    private void CheckRegionNow() => _ = _region.CheckNowAsync();
 
     /// <summary>Сервисы отвечают за доли секунды — без минимума мигание не успело бы стать заметным.</summary>
     private static readonly TimeSpan RegionBlinkMinDuration = TimeSpan.FromMilliseconds(1200);
@@ -366,7 +372,7 @@ public sealed class TrayService : IDisposable
 
     private void OnRegionCheckStarted()
     {
-        if (_regionAnim == null || _region == null)
+        if (_regionAnim == null)
             return;
         _regionCheckSeq++;
         _regionCheckStartedUtc = DateTime.UtcNow;
@@ -382,7 +388,7 @@ public sealed class TrayService : IDisposable
 
     private async void OnRegionCheckCompleted()
     {
-        if (_regionAnim == null || _region == null)
+        if (_regionAnim == null)
             return;
         var seq = _regionCheckSeq;
         var remaining = RegionBlinkMinDuration - (DateTime.UtcNow - _regionCheckStartedUtc);
@@ -402,17 +408,17 @@ public sealed class TrayService : IDisposable
         string text;
         if (_region is { IsChecking: true })
             text = LocalizationService.T("Tray.RegionChecking");
-        else if (_region?.CountryCode is not { } code)
+        else if (_region.CountryCode is not { } code)
             text = LocalizationService.T("Tray.RegionUnknown");
         else if (_region.VpnDetected && _region.RealCountryCode != null && _region.IpCountryCode != null)
             text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("Tray.RegionVpn"),
-                CountryDisplayName(_region.RealCountryCode), CountryDisplayName(_region.IpCountryCode));
+                RegionService.CountryDisplayName(_region.RealCountryCode), RegionService.CountryDisplayName(_region.IpCountryCode));
         else if (_region.RealCheckFailed)
             text = string.Format(CultureInfo.CurrentCulture, LocalizationService.T("Tray.RegionRealUnknown"),
-                CountryDisplayName(code));
+                RegionService.CountryDisplayName(code));
         else
         {
-            var name = CountryDisplayName(code);
+            var name = RegionService.CountryDisplayName(code);
             // RealCountryCode задан только после успешной проверки в усиленном режиме: VPN нет, страна подтверждена.
             var key = _region.LastCheckFailed ? "Tray.RegionCheckFailed"
                 : _region.RealCountryCode != null ? "Tray.RegionTooltipEnhanced"
@@ -422,18 +428,6 @@ public sealed class TrayService : IDisposable
 
         // NotifyIcon.Text ограничен 127 символами.
         _regionIcon.Text = text.Length > 127 ? text[..127] : text;
-    }
-
-    private static string CountryDisplayName(string code)
-    {
-        try
-        {
-            return new RegionInfo(code).DisplayName + " (" + code + ")";
-        }
-        catch (ArgumentException)
-        {
-            return code;
-        }
     }
 
     // ---------- Быстрый замер ----------

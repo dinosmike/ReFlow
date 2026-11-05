@@ -24,6 +24,10 @@ public sealed class TrayMenuSettings
     [JsonPropertyName("clickPairing")]
     public TrayClickPairing ClickPairing { get; set; } = TrayClickPairing.WindowSingle_QuickTestDouble;
 
+    /// <summary>Флаг и название страны над табло скорости в главном окне.</summary>
+    [JsonPropertyName("showRegionInWindow")]
+    public bool ShowRegionInWindow { get; set; } = true;
+
     /// <summary>Вторая иконка в трее — флаг страны внешнего IP.</summary>
     [JsonPropertyName("showRegionIcon")]
     public bool ShowRegionIcon { get; set; } = true;

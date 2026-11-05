@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <OutputType>WinExe</OutputType>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <TargetFramework>net6.0-windows</TargetFramework>
@@ -35,6 +35,8 @@
     <Resource Include="Assets\settings.svg" />
     <!-- Квадратные флаги для иконки региона: flag-icons 1x1 (MIT, см. Flags\LICENSE-flag-icons.txt), PNG 64x64; правки — Flags\src-overrides. -->
     <Resource Include="Flags\*.png" />
+    <!-- Названия стран на языках программы: i18n-iso-countries (MIT, см. Localization\Countries\LICENSE-i18n-iso-countries.txt). -->
+    <Resource Include="Localization\Countries\*.json" />
   </ItemGroup>
 
 </Project>

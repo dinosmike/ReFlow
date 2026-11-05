@@ -102,7 +102,7 @@
                 </Grid>
             </Border>
 
-            <Grid Margin="24,42,24,50" ClipToBounds="False">
+            <Grid Margin="24,9,24,50" ClipToBounds="False">
                 <Grid Panel.ZIndex="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -114,6 +114,42 @@
                                 VerticalAlignment="Top"
                                 Width="380"
                                 Margin="0,4,0,0">
+                        <!-- Флаг страны и подпись как в подсказке у иконки региона в трее; место взято из верхнего отступа, высота окна та же. -->
+                        <!-- Выключена в настройках — Hidden, а не Collapsed: табло остаётся на месте. -->
+                        <StackPanel x:Name="RegionLine"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    Height="20"
+                                    Margin="0,0,0,13">
+                            <Grid Width="14" Height="14" VerticalAlignment="Center">
+                                <Image x:Name="RegionFlagImage"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <Border x:Name="RegionUnknownMark"
+                                        Background="{DynamicResource Rf.Border}"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed">
+                                    <TextBlock Text="?"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource Rf.Text.Muted}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <Ellipse x:Name="RegionVpnDot"
+                                         Width="6" Height="6"
+                                         Fill="Orange"
+                                         Stroke="{DynamicResource Rf.Window.Background}"
+                                         StrokeThickness="1"
+                                         HorizontalAlignment="Right"
+                                         VerticalAlignment="Bottom"
+                                         Margin="0,0,-2,-2"
+                                         Visibility="Collapsed"/>
+                            </Grid>
+                            <TextBlock x:Name="RegionCaption"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource Rf.Text.Muted}"
+                                       VerticalAlignment="Center"
+                                       Margin="6,0,0,0"/>
+                        </StackPanel>
                         <!-- Габариты и CornerRadius как у SpeedRollingDigits: контур прогресса совпадает с рамкой циферблата. -->
                         <Grid Width="278"
                               Height="130"

@@ -43,6 +43,49 @@ public sealed class RegionService : IDisposable
     /// <summary>Страна, которую показываем: реальная, если усиленный режим нашёл VPN, иначе страна внешнего IP.</summary>
     public string? CountryCode => VpnDetected && RealCountryCode != null ? RealCountryCode : IpCountryCode;
 
+    /// <summary>«Казахстан (KZ)» на языке программы (не Windows); для неизвестного кода — сам код.</summary>
+    public static string CountryDisplayName(string code)
+    {
+        var name = CountryName(code);
+        return name != code ? name + " (" + code.ToUpperInvariant() + ")" : name;
+    }
+
+    /// <summary>«Казахстан» без кода — для строки над табло; для неизвестного кода — сам код.</summary>
+    public static string CountryName(string code)
+    {
+        code = code.ToUpperInvariant();
+        return CountryNames(LocalizationService.CurrentLanguageCode).GetValueOrDefault(code)
+               ?? CountryNames("en").GetValueOrDefault(code)
+               ?? code;
+    }
+
+    private static readonly Dictionary<string, Dictionary<string, string>> CountryNamesByLanguage = new(StringComparer.OrdinalIgnoreCase);
+
+    private static Dictionary<string, string> CountryNames(string languageCode)
+    {
+        if (CountryNamesByLanguage.TryGetValue(languageCode, out var cached))
+            return cached;
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var info = System.Windows.Application.GetResourceStream(
+                new Uri($"pack://application:,,,/Localization/Countries/{languageCode.ToLowerInvariant()}.json", UriKind.Absolute));
+            if (info != null)
+            {
+                using var stream = info.Stream;
+                names = JsonSerializer.Deserialize<Dictionary<string, string>>(stream) is { } parsed
+                    ? new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase)
+                    : names;
+            }
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or JsonException)
+        {
+            // Нет файла для языка — останется английский или код.
+        }
+        CountryNamesByLanguage[languageCode] = names;
+        return names;
+    }
+
     /// <summary>Страна внешнего IP (под VPN — страна VPN-сервера). Null — ещё ни разу не определили.</summary>
     public string? IpCountryCode { get; private set; }
 
@@ -64,7 +107,7 @@ public sealed class RegionService : IDisposable
     public event Action? CheckCompleted;
 
     /// <summary>
-    /// <paramref name="enabled"/> — иконка показана (иначе никаких запросов);
+    /// <paramref name="enabled"/> — проверка включена (иначе никаких запросов);
     /// <paramref name="periodic"/> + <paramref name="intervalMinutes"/> — проверка по таймеру;
     /// <paramref name="enhanced"/> — дополнительно искать реальную страну в обход VPN.
     /// </summary>
