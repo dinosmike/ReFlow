@@ -392,6 +392,7 @@ public partial class SettingsWindow
         StartupToTrayCheck.IsChecked = settings.MinimizeToTrayOnStartup;
         TrayHideAnimationCheck.IsChecked = settings.MinimizeToTrayAnimationEnabled;
         PlaySoundOnReconnectCheck.IsChecked = settings.PlaySoundOnReconnect;
+        AutoUpdateCheck.IsChecked = settings.AutoUpdate;
         CloseToTrayCheck.IsChecked = settings.MinimizeToTrayOnCloseClick;
 
         AutoMeasureOnWindowOpenCheck.IsChecked = settings.SpeedTest.AutoStartWhenWindowOpen;
@@ -476,6 +477,7 @@ public partial class SettingsWindow
         _settings.MinimizeToTrayOnStartup = StartupToTrayCheck.IsChecked == true;
         _settings.MinimizeToTrayAnimationEnabled = TrayHideAnimationCheck.IsChecked == true;
         _settings.PlaySoundOnReconnect = PlaySoundOnReconnectCheck.IsChecked == true;
+        _settings.AutoUpdate = AutoUpdateCheck.IsChecked == true;
         _settings.MinimizeToTrayOnCloseClick = CloseToTrayCheck.IsChecked == true;
 
         _settings.SpeedTest.AutoStartWhenWindowOpen = AutoMeasureOnWindowOpenCheck.IsChecked == true;

@@ -57,8 +57,19 @@
                                 <TextBlock Text="ReFlow" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Bottom"
                                            Cursor="Hand"
                                            MouseLeftButtonDown="TitleBarAbout_OnMouseLeftButtonDown"/>
-                                <Button Click="TitleBarAbout_OnClick"
-                                        Style="{StaticResource Rf.TitleBar.AboutInfo}"/>
+                                <!-- Точка на ⓘ: есть непрочитанное «Что нового» (модуль ReUpdate). -->
+                                <Grid>
+                                    <Button Click="TitleBarAbout_OnClick"
+                                            Style="{StaticResource Rf.TitleBar.AboutInfo}"/>
+                                    <Ellipse x:Name="WhatsNewDot"
+                                             Width="7" Height="7"
+                                             HorizontalAlignment="Right"
+                                             VerticalAlignment="Top"
+                                             Margin="0,0,-3,0"
+                                             Fill="{DynamicResource Rf.Accent}"
+                                             IsHitTestVisible="False"
+                                             Visibility="Collapsed"/>
+                                </Grid>
                             </StackPanel>
                             <TextBlock Margin="0,2,0,0"
                                        FontSize="11"
@@ -151,9 +162,15 @@
                                        Margin="6,0,0,0"/>
                         </StackPanel>
                         <!-- Габариты и CornerRadius как у SpeedRollingDigits: контур прогресса совпадает с рамкой циферблата. -->
-                        <Grid Width="278"
+                        <Grid x:Name="DialHost"
+                              Width="278"
                               Height="130"
-                              HorizontalAlignment="Center">
+                              HorizontalAlignment="Center"
+                              Background="Transparent"
+                              ContextMenuOpening="DialHost_OnContextMenuOpening">
+                            <Grid.ContextMenu>
+                                <ContextMenu/>
+                            </Grid.ContextMenu>
                             <controls:SpeedRollingDigits x:Name="SpeedDial"
                                                          HorizontalAlignment="Center"
                                                          VerticalAlignment="Center"/>

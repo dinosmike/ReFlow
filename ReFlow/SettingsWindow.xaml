@@ -226,6 +226,11 @@
                                 <TextBlock TextWrapping="Wrap"
                                            Text="{DynamicResource Loc_SettingsWindow_CloseToTrayCross}"/>
                             </CheckBox>
+                            <CheckBox x:Name="AutoUpdateCheck"
+                                      Margin="0,4">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="{DynamicResource Loc_SettingsWindow_AutoUpdate}"/>
+                            </CheckBox>
                         </StackPanel>
                     </Border>
 

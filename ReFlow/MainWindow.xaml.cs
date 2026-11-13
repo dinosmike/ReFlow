@@ -438,6 +438,10 @@ public partial class MainWindow : INotifyPropertyChanged
 
         ReloadFromStorage();
         SubscribeMeasurementSession();
+        // Точка на ⓘ, пока «Что нового» после обновления не прочитано.
+        UpdateWhatsNewDot();
+        ReUpdate.WhatsNewState.Changed += UpdateWhatsNewDot;
+        Closed += (_, _) => ReUpdate.WhatsNewState.Changed -= UpdateWhatsNewDot;
         MiniGraphFillPath.Fill = BrushFromHex(MiniGraphFillColorHex);
         ResetSessionSpeedStats();
         InitDialProgressOutline();
@@ -509,6 +513,9 @@ public partial class MainWindow : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private void UpdateWhatsNewDot() =>
+        WhatsNewDot.Visibility = ReUpdate.WhatsNewState.HasUnseen ? Visibility.Visible : Visibility.Collapsed;
+
     private void SubscribeMeasurementSession()
     {
         MeasurementSession.Started += OnMeasureStarted;
@@ -517,6 +524,7 @@ public partial class MainWindow : INotifyPropertyChanged
         MeasurementSession.Progress += ApplySpeedProgress;
         MeasurementSession.Completed += OnMeasureCompleted;
         MeasurementSession.Aborted += OnMeasureAborted;
+        UpdateDialServerTooltip();
         Closed += (_, _) =>
         {
             MeasurementSession.Started -= OnMeasureStarted;
@@ -540,6 +548,60 @@ public partial class MainWindow : INotifyPropertyChanged
         ResetSessionSpeedStats();
         UpdateSpeedStatsLine();
         StartStopText = "Стоп";
+        UpdateDialServerTooltip();
+    }
+
+    /// <summary>Правый клик по табло: выбрать сервер замера. Выбранный идёт первым; не отвечает — дальше по списку.</summary>
+    private void DialHost_OnContextMenuOpening(object sender, System.Windows.Controls.ContextMenuEventArgs e)
+    {
+        var menu = DialHost.ContextMenu;
+        menu.Items.Clear();
+        var settings = SettingsStorage.Load();
+        var servers = MeasurementSession.GetServers(settings);
+        // Ничего не выбрано (или выбранного больше нет в списке) — отмечен первый, основной.
+        var preferred = servers.Any(f => string.Equals(f.Url, settings.SpeedTest.PreferredServerUrl, StringComparison.OrdinalIgnoreCase))
+            ? settings.SpeedTest.PreferredServerUrl
+            : servers.FirstOrDefault().Url;
+
+        var fallback = new System.Windows.Controls.MenuItem
+        {
+            Header = LocalizationService.T("MainWindow.DialServerAutoFallback"),
+            IsChecked = settings.SpeedTest.AutoFallbackServers,
+        };
+        fallback.Click += (_, _) =>
+        {
+            var s = SettingsStorage.Load();
+            s.SpeedTest.AutoFallbackServers = !s.SpeedTest.AutoFallbackServers;
+            SettingsStorage.Save(s);
+        };
+        menu.Items.Add(fallback);
+        menu.Items.Add(new System.Windows.Controls.Separator());
+
+        foreach (var (name, url) in servers)
+            menu.Items.Add(ServerMenuItem(name, url, string.Equals(url, preferred, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private System.Windows.Controls.MenuItem ServerMenuItem(string header, string url, bool isChecked)
+    {
+        var item = new System.Windows.Controls.MenuItem { Header = header, IsChecked = isChecked };
+        item.Click += (_, _) =>
+        {
+            var s = SettingsStorage.Load();
+            s.SpeedTest.PreferredServerUrl = url;
+            SettingsStorage.Save(s);
+            // Сразу перемерить с выбранного сервера.
+            MeasurementSession.Start(restart: true);
+        };
+        return item;
+    }
+
+    /// <summary>Откуда идёт (или шёл последний) замер — только в подсказке циферблата, переключение серверов незаметное.</summary>
+    private void UpdateDialServerTooltip()
+    {
+        var name = MeasurementSession.CurrentServerName;
+        DialHost.ToolTip = name == null
+            ? null
+            : string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.DialServer"), name);
     }
 
     private void OnMeasureMeasuring(TimeSpan duration)
@@ -548,6 +610,7 @@ public partial class MainWindow : INotifyPropertyChanged
         _sessionWaitingForNetwork = false;
         _sessionMeasuring = true;
         UpdateSpeedStatsLine();
+        UpdateDialServerTooltip();
         BeginDialProgressRing(duration);
     }
 

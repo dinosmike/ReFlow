@@ -10,6 +10,10 @@ public sealed class StartupWindowSettings
     public bool MinimizeToTrayOnStartup { get; set; }
     public bool MinimizeToTrayAnimationEnabled { get; set; } = true;
 
+    /// <summary>Сама скачивать новую версию с GitHub и перезапускаться.</summary>
+    [JsonPropertyName("autoUpdate")]
+    public bool AutoUpdate { get; set; } = true;
+
     /// <summary>Короткая мелодия, когда во время замера вернулся интернет.</summary>
     [JsonPropertyName("playSoundOnReconnect")]
     public bool PlaySoundOnReconnect { get; set; }

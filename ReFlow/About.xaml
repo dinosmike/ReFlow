@@ -124,9 +124,22 @@
                         <TextBlock FontSize="13"
                                    Foreground="{DynamicResource Rf.Text.Muted}"
                                    Text="{DynamicResource Loc_About_VersionPrefix}"/>
-                        <TextBlock FontSize="13"
-                                   Foreground="{DynamicResource Rf.Text.Muted}"
-                                   Text=" 1.0"/>
+                        <TextBlock x:Name="VersionValue"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource Rf.Text.Muted}"/>
+                        <!-- «Что нового» с точкой, пока новое не прочитано (модуль ReUpdate). -->
+                        <TextBlock Margin="14,0,0,0" FontSize="13">
+                            <Hyperlink Style="{StaticResource Rf.About.DonateLink}"
+                                       Click="WhatsNew_OnClick">
+                                <Run Text="{DynamicResource Loc_About_WhatsNew}"/>
+                            </Hyperlink>
+                        </TextBlock>
+                        <Ellipse x:Name="WhatsNewDotAbout"
+                                 Width="7" Height="7"
+                                 Margin="4,0,0,6"
+                                 VerticalAlignment="Center"
+                                 Fill="{DynamicResource Rf.Accent}"
+                                 Visibility="Collapsed"/>
                     </StackPanel>
 
                     <Grid Margin="0,14,0,0">
@@ -184,14 +197,29 @@
                         </StackPanel>
                     </Grid>
 
-                    <Button MinWidth="100"
-                            Margin="0,20,0,0"
-                            HorizontalAlignment="Right"
+                    <Grid Margin="0,20,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- Скрытая статистика скачиваний (правый клик по «ОК»); окно растёт по высоте само -->
+                        <TextBlock x:Name="DownloadStatsText"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource Rf.Text.Muted}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Bottom"
+                                   Margin="0,0,12,0"
+                                   Visibility="Collapsed"/>
+                    <Button Grid.Column="1"
+                            MinWidth="100"
+                            VerticalAlignment="Bottom"
                             Padding="16,8"
                             Style="{StaticResource Rf.Button.Accent}"
                             Content="{DynamicResource Loc_About_Ok}"
                             IsDefault="True"
-                            Click="Ok_OnClick"/>
+                            Click="Ok_OnClick"
+                            PreviewMouseRightButtonUp="Ok_OnRightClick"/>
+                    </Grid>
                 </StackPanel>
             </Border>
         </DockPanel>

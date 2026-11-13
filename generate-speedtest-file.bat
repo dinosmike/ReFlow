@@ -1,11 +1,11 @@
 @echo off
 setlocal enableextensions
 
-REM Creates 2GB random speedtest file: speedtest.bin
+REM Creates 300MB random speedtest file: speedtest.bin
 REM Output location: same folder as this .bat
 
 set "OUT=%~dp0speedtest.bin"
-set "SIZE=1GB"
+set "SIZE=300MB"
 
 echo.
 echo == ReFlow: generating %SIZE% file ==

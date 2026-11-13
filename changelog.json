@@ -1,0 +1,64 @@
+{
+  "versions": [
+    {
+      "version": "1.3",
+      "date": "2026-11-14",
+      "ru": [
+        "Автообновление",
+        "Галочка «Проверять обновления» в настройках",
+        "Окно «Что нового» с историей версий",
+        "Запасные серверы замера: если основной недоступен, замер идёт через другой",
+        "Выбор сервера замера правым кликом по табло",
+        "Название сервера в подсказке на табло"
+      ],
+      "en": [
+        "Auto-update",
+        "\"Check for updates\" option in settings",
+        "\"What's new\" window with version history",
+        "Fallback test servers: if the main one is unavailable, the test runs through another",
+        "Choose the test server by right-clicking the dial",
+        "Server name in the dial tooltip"
+      ]
+    },
+    {
+      "version": "1.2",
+      "date": "2026-11-13",
+      "ru": [
+        "Один замер сразу в окне и в трее",
+        "Мелодия, когда вернулся интернет",
+        "Раздел настроек «Возможности»"
+      ],
+      "en": [
+        "One test shown in the window and the tray at once",
+        "A tune when the internet comes back",
+        "New “Features” settings section"
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-05",
+      "ru": [
+        "Флаг и название страны в главном окне",
+        "Настройка «Показывать в главном окне страну»"
+      ],
+      "en": [
+        "Country flag and name in the main window",
+        "“Show the country in the main window” option"
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-03",
+      "ru": [
+        "Иконка в трее с флагом страны",
+        "Периодическая проверка, усиленный режим при VPN",
+        "Режим ожидания сети"
+      ],
+      "en": [
+        "Tray icon with the country flag",
+        "Periodic check and enhanced mode behind a VPN",
+        "Waiting-for-network mode"
+      ]
+    }
+  ]
+}

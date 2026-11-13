@@ -33,17 +33,25 @@ public static class ConnectivityProbe
         return new HttpClient(handler) { Timeout = RequestTimeout };
     }
 
-    /// <summary>Ждёт, пока GET (только заголовки) к файлу замера не завершится успешно. «Стоп» отменяет через <paramref name="cancellationToken"/>.</summary>
-    public static async Task WaitUntilReachableAsync(Uri downloadUrl, Action? onWaiting, CancellationToken cancellationToken)
+    /// <summary>
+    /// Ждёт, пока хоть один сервер из списка не ответит на GET (только заголовки), и возвращает первый по порядку,
+    /// который ответил. Пробники идут параллельно, так что запасной не ждёт таймаута основного дольше одного раза.
+    /// «Стоп» отменяет через <paramref name="cancellationToken"/>.
+    /// </summary>
+    public static async Task<Uri> WaitUntilAnyReachableAsync(IReadOnlyList<Uri> downloadUrls, Action? onWaiting, CancellationToken cancellationToken)
     {
-        if (downloadUrl == null) throw new ArgumentNullException(nameof(downloadUrl));
+        if (downloadUrls.Count == 0) throw new ArgumentException("No download URLs.", nameof(downloadUrls));
 
         var announced = false;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (await IsReachableAsync(downloadUrl, cancellationToken).ConfigureAwait(false))
-                return;
+            var probes = downloadUrls.Select(u => IsReachableAsync(u, cancellationToken)).ToList();
+            for (var i = 0; i < probes.Count; i++)
+            {
+                if (await probes[i].ConfigureAwait(false))
+                    return downloadUrls[i];
+            }
 
             if (!announced)
             {

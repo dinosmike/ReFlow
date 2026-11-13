@@ -1,3 +1,4 @@
+using ReFlow.Models;
 using System.Net.Http;
 using System.Windows.Threading;
 
@@ -22,6 +23,9 @@ public static class MeasurementSession
     public static event Action? WaitingForNetwork;
     /// <summary>Сеть есть, качаем; аргумент — длительность замера.</summary>
     public static event Action<TimeSpan>? Measuring;
+
+    /// <summary>Название сервера, с которого идёт (или шёл последний) замер; null — сервер ещё не выбран.</summary>
+    public static string? CurrentServerName { get; private set; }
     public static event Action<SpeedTestProgress>? Progress;
     public static event Action<SpeedTestResult>? Completed;
     /// <summary>Остановлен вручную или упал с ошибкой.</summary>
@@ -32,22 +36,50 @@ public static class MeasurementSession
     /// <summary>Запустить замер; <c>false</c> — не задан URL файла.</summary>
     public static bool Start(bool restart = false)
     {
-        if (restart)
+        if (restart && _cts != null)
+        {
+            // Старый прогон отменён; его колбэки отсекает новое поколение, ждать его завершения не нужно.
             Stop();
+            _cts = null;
+        }
         if (_cts != null)
             return true;
 
         var s = SettingsStorage.Load();
-        var fileUrlRaw = ((s.SpeedTest.UseCustomDownloadFileUrl ? s.SpeedTest.DownloadFileUrl : null) ?? SpeedTestConfig.DownloadFileUrl).Trim();
-        if (string.IsNullOrWhiteSpace(fileUrlRaw))
-            return false;
 
         var cts = new CancellationTokenSource();
         _cts = cts;
         var gen = ++_generation;
+        CurrentServerName = null;
         Started?.Invoke();
-        _ = RunAsync(gen, cts, new Uri(fileUrlRaw, UriKind.Absolute), TimeSpan.FromSeconds(Math.Clamp(s.SpeedTestDurationSeconds, 1, 600)));
+        // Выбранный вручную сервер первым, дальше остальные по порядку — если он не отвечает.
+        var preferred = s.SpeedTest.PreferredServerUrl;
+        var servers = GetServers(s)
+            .OrderBy(f => string.Equals(f.Url, preferred, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .Select(f => (f.Name, Url: new Uri(f.Url, UriKind.Absolute)))
+            // Без автоперебора — только выбранный (или основной): нет связи — ждём его.
+            .Take(s.SpeedTest.AutoFallbackServers ? int.MaxValue : 1)
+            .ToList();
+        _ = RunAsync(gen, cts, servers, TimeSpan.FromSeconds(Math.Clamp(s.SpeedTestDurationSeconds, 1, 600)));
         return true;
+    }
+
+    /// <summary>
+    /// Все серверы замера по порядку: основной (или свой из настроек), дальше запасные. Названия — на языке программы.
+    /// </summary>
+    public static List<(string Name, string Url)> GetServers(AppSettings? settings = null)
+    {
+        var s = settings ?? SettingsStorage.Load();
+        var custom = s.SpeedTest.UseCustomDownloadFileUrl ? s.SpeedTest.DownloadFileUrl?.Trim() : null;
+        var ru = LocalizationService.CurrentLanguageCode == "ru";
+        var main = string.IsNullOrWhiteSpace(custom)
+            ? (Name: SpeedTestConfig.DownloadFileName, Url: SpeedTestConfig.DownloadFileUrl)
+            : (Name: SpeedTestConfig.CustomFileName, Url: custom);
+        return new[] { main }.Concat(SpeedTestConfig.FallbackDownloadFiles)
+            .Where(f => Uri.IsWellFormedUriString(f.Url, UriKind.Absolute))
+            .DistinctBy(f => f.Url, StringComparer.OrdinalIgnoreCase)
+            .Select(f => (Name: ru ? f.Name.Ru : f.Name.En, f.Url))
+            .ToList();
     }
 
     public static void Stop()
@@ -55,19 +87,21 @@ public static class MeasurementSession
         try { _cts?.Cancel(); } catch { /* ignore */ }
     }
 
-    private static async Task RunAsync(int gen, CancellationTokenSource cts, Uri dlBase, TimeSpan duration)
+    private static async Task RunAsync(int gen, CancellationTokenSource cts, IReadOnlyList<(string Name, Uri Url)> servers, TimeSpan duration)
     {
         var ct = cts.Token;
         var waited = false;
         try
         {
-            await ConnectivityProbe.WaitUntilReachableAsync(
-                dlBase,
+            var dlBase = await ConnectivityProbe.WaitUntilAnyReachableAsync(
+                servers.Select(f => f.Url).ToList(),
                 () => OnUi(gen, () => { waited = true; WaitingForNetwork?.Invoke(); }),
                 ct).ConfigureAwait(false);
 
+            var serverName = servers.First(f => f.Url == dlBase).Name;
             OnUi(gen, () =>
             {
+                CurrentServerName = serverName;
                 if (waited && SettingsStorage.Load().PlaySoundOnReconnect)
                     ReconnectChime.Play();
                 Measuring?.Invoke(duration);

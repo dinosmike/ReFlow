@@ -20,6 +20,10 @@ public partial class About
     {
         RunDonatePrefix.Text = LocalizationService.T("About.DonatePrefix");
         RunDonateLink.Text = LocalizationService.T("About.DonateLink");
+        VersionValue.Text = " " + ReUpdate.ReUpdateConfig.CurrentVersion.ToString(2);
+        UpdateWhatsNewDot();
+        ReUpdate.WhatsNewState.Changed += UpdateWhatsNewDot;
+        Closed += (_, _) => ReUpdate.WhatsNewState.Changed -= UpdateWhatsNewDot;
 
         try
         {
@@ -51,6 +55,11 @@ public partial class About
         }
     }
 
+    private void UpdateWhatsNewDot() =>
+        WhatsNewDotAbout.Visibility = ReUpdate.WhatsNewState.HasUnseen ? Visibility.Visible : Visibility.Collapsed;
+
+    private void WhatsNew_OnClick(object sender, RoutedEventArgs e) => ReUpdate.WhatsNewWindow.ShowFor(this);
+
     private void SocialLink_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is WpfButton { Tag: string url })
@@ -81,6 +90,15 @@ public partial class About
     }
 
     private void Ok_OnClick(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>Скрыто: правый клик по «ОК» — сколько раз скачали и обновили программу (счётчики GitHub).</summary>
+    private async void Ok_OnRightClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        DownloadStatsText.Text = "…";
+        DownloadStatsText.Visibility = Visibility.Visible;
+        DownloadStatsText.Text = await ReUpdate.DownloadStats.LoadTextAsync();
+    }
 
     private void TitleBar_OnMouseDown(object sender, MouseButtonEventArgs e)
     {

@@ -55,6 +55,13 @@ public sealed class AppSettings
     }
 
     [JsonIgnore]
+    public bool AutoUpdate
+    {
+        get => StartupAndWindow.AutoUpdate;
+        set => StartupAndWindow.AutoUpdate = value;
+    }
+
+    [JsonIgnore]
     public bool PlaySoundOnReconnect
     {
         get => StartupAndWindow.PlaySoundOnReconnect;

@@ -94,6 +94,13 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
+                            <!-- Галочка выбранного пункта — слева, в отступе, разметку не сдвигает -->
+                            <TextBlock x:Name="CheckMark" Grid.Column="0"
+                                       Text="✓"
+                                       Foreground="{DynamicResource Rf.Accent}"
+                                       Margin="-18,0,0,0"
+                                       HorizontalAlignment="Left"
+                                       Visibility="Collapsed"/>
                             <ContentPresenter Grid.Column="0" ContentSource="Header" RecognizesAccessKey="True"/>
                             <TextBlock x:Name="GestureText" Grid.Column="1"
                                        Text="{TemplateBinding InputGestureText}"
@@ -104,6 +111,9 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Rf.TitleBar.ButtonHoverBackground}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>

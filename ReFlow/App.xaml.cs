@@ -119,14 +119,25 @@ public partial class App : System.Windows.Application
         var startupSettings = SettingsStorage.Load();
         AutostartService.SetEnabled(startupSettings.AutostartEnabled);
 
+        // Перезапуск после автообновления — тихо в трее, без окна и без авто-замера.
+        var afterUpdate = false;
         foreach (var arg in e.Args)
         {
             if (string.Equals(arg, "--simulate-offline", StringComparison.OrdinalIgnoreCase))
-            {
                 ConnectivityProbe.SimulateOffline = true;
-                break;
-            }
+            else if (string.Equals(arg, ReUpdate.Updater.UpdatedArg, StringComparison.OrdinalIgnoreCase))
+                afterUpdate = true;
         }
+        // Модуль ReUpdate: автообновление с GitHub и «Что нового» (см. ReUpdate\КАК ПОДКЛЮЧИТЬ.md).
+        ReUpdate.ReUpdateConfig.Owner = "dinosmike";
+        ReUpdate.ReUpdateConfig.Repo = "ReFlow";
+        ReUpdate.ReUpdateConfig.AssetName = "ReFlow.exe";
+        ReUpdate.ReUpdateConfig.AppDataFolderName = "ReFlow";
+        ReUpdate.ReUpdateConfig.Language = () => LocalizationService.CurrentLanguageCode;
+        ReUpdate.ReUpdateConfig.AutoUpdateEnabled = () => SettingsStorage.Load().AutoUpdate;
+        ReUpdate.ReUpdateConfig.IsBusy = () => MeasurementSession.IsRunning;
+        ReUpdate.Updater.CleanupAfterUpdate();
+        ReUpdate.WhatsNewState.Initialize();
 
         // До показа главного окна нельзя использовать OnLastWindowClose: при первом запуске закрытие окна вопроса
         // (советы) сочтётся «последним окном» и процесс завершится до main.Show().
@@ -144,14 +155,15 @@ public partial class App : System.Windows.Application
         MainWindow = main;
         main.Show();
 
-        if (!ConnectivityProbe.SimulateOffline && startupSettings.MinimizeToTrayOnStartup)
+        if (!ConnectivityProbe.SimulateOffline && (startupSettings.MinimizeToTrayOnStartup || afterUpdate))
             main.Hide();
 
         _tray = new TrayService(UiTheme.Dark);
         main.AttachRegion(_tray.Region);
-        if (!ConnectivityProbe.SimulateOffline)
+        if (!ConnectivityProbe.SimulateOffline && !afterUpdate)
             _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
         LocalizationService.LanguageChanged += OnLocalizationLanguageChanged;
+        ReUpdate.Updater.Start(Dispatcher);
     }
 
     private void OnLocalizationLanguageChanged() => _tray?.RefreshTexts();

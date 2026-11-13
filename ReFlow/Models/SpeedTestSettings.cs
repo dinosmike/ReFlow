@@ -39,5 +39,15 @@ public sealed class SpeedTestSettings
     [JsonPropertyOrder(6)]
     [JsonPropertyName("autoStartOnTrayStartup")]
     public bool AutoStartOnTrayStartup { get; set; }
+
+    /// <summary>Сервер замера, выбранный правым кликом по табло (его URL); null — основной.</summary>
+    [JsonPropertyOrder(7)]
+    [JsonPropertyName("preferredServerUrl")]
+    public string? PreferredServerUrl { get; set; }
+
+    /// <summary>Если выбранный сервер не отвечает — перейти на следующий по списку; выключено — ждать выбранный.</summary>
+    [JsonPropertyOrder(8)]
+    [JsonPropertyName("autoFallbackServers")]
+    public bool AutoFallbackServers { get; set; } = true;
 }
 
