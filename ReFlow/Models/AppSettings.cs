@@ -55,6 +55,13 @@ public sealed class AppSettings
     }
 
     [JsonIgnore]
+    public bool PlaySoundOnReconnect
+    {
+        get => StartupAndWindow.PlaySoundOnReconnect;
+        set => StartupAndWindow.PlaySoundOnReconnect = value;
+    }
+
+    [JsonIgnore]
     public TrayIconClickAction? TraySingleClickAction
     {
         get => Tray.SingleClickAction;

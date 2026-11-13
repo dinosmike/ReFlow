@@ -10,6 +10,10 @@ public sealed class StartupWindowSettings
     public bool MinimizeToTrayOnStartup { get; set; }
     public bool MinimizeToTrayAnimationEnabled { get; set; } = true;
 
+    /// <summary>Короткая мелодия, когда во время замера вернулся интернет.</summary>
+    [JsonPropertyName("playSoundOnReconnect")]
+    public bool PlaySoundOnReconnect { get; set; }
+
     [JsonPropertyName("askOnExit")]
     public bool AskOnExit { get; set; } = true;
 }
@@ -26,7 +30,7 @@ public sealed class TrayMenuSettings
 
     /// <summary>Флаг и название страны над табло скорости в главном окне.</summary>
     [JsonPropertyName("showRegionInWindow")]
-    public bool ShowRegionInWindow { get; set; } = true;
+    public bool ShowRegionInWindow { get; set; }
 
     /// <summary>Вторая иконка в трее — флаг страны внешнего IP.</summary>
     [JsonPropertyName("showRegionIcon")]

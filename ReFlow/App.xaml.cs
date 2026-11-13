@@ -139,6 +139,7 @@ public partial class App : System.Windows.Application
 
         ShutdownMode = ShutdownMode.OnLastWindowClose;
         // Icon не задаём — Windows берёт многомасштабную иконку из exe (ApplicationIcon), как у окна настроек.
+        MeasurementSession.Initialize(Dispatcher);
         var main = new MainWindow();
         MainWindow = main;
         main.Show();

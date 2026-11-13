@@ -18,6 +18,7 @@ It is a **self-contained** build — no need to install .NET.
 - **Waits for the network** — if there is no internet, the app waits for it and starts the test by itself
 - **Country flag** — shows the country of your external IP in the main window and as a second tray icon; checks on network change, on click or on a timer
 - **Enhanced mode behind a VPN** — an extra request that bypasses the VPN shows your real country
+- **Sound when the network is back** — a short tune when the internet returns during a test
 - **Test duration** — 10 / 30 / 60 seconds or your own value
 - **Autostart and auto test** — starts with Windows, minimizes to the tray, runs a test on startup
 - **Your own test file** — you can set a link to a file on your own server
@@ -75,6 +76,7 @@ Provided "as is" for personal and educational use.
 - **Ожидание сети** — если интернета нет, программа ждёт его и начинает замер сама
 - **Флаг страны** — страна по внешнему IP в главном окне и второй иконкой в трее; проверка при смене сети, по клику или по таймеру
 - **Усиленный режим при VPN** — дополнительный запрос в обход VPN показывает реальную страну
+- **Звук при появлении сети** — короткая мелодия, когда во время замера вернулся интернет
 - **Длительность замера** — 10 / 30 / 60 секунд или своё значение
 - **Автозапуск и авто-замер** — старт вместе с Windows, сворачивание в трей, замер при запуске
 - **Свой файл для замера** — можно указать ссылку на файл на своём сервере

@@ -372,8 +372,8 @@ public partial class MainWindow : INotifyPropertyChanged
         ClearTaskbarProgress();
     }
 
-    private readonly SpeedTestService _speedTest = new(new System.Net.Http.HttpClient());
-    private CancellationTokenSource? _speedTestCts;
+    /// <summary>Длительность текущего замера — для финального заполнения контура.</summary>
+    private TimeSpan _measureDuration;
 
     private double _currentMbps;
     public double CurrentMbps
@@ -437,6 +437,7 @@ public partial class MainWindow : INotifyPropertyChanged
         TooltipInitialShowDelayMs = _tooltipDelayMs;
 
         ReloadFromStorage();
+        SubscribeMeasurementSession();
         MiniGraphFillPath.Fill = BrushFromHex(MiniGraphFillColorHex);
         ResetSessionSpeedStats();
         InitDialProgressOutline();
@@ -454,19 +455,10 @@ public partial class MainWindow : INotifyPropertyChanged
 
     private async void StartStop_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_speedTestCts != null)
+        if (MeasurementSession.IsRunning)
         {
-            try { _speedTestCts.Cancel(); } catch { /* ignore */ }
-            ResetSessionSpeedStats();
-            ResetDialProgressRingAfterAbort();
-            CurrentMbps = 0;
-            SpeedDial.AnimateToValue(0, slideDown: true);
-            _lastDialSpeed = 0;
-            StopMiniGraphFadeAndResetOpacity();
-            _graphSamples.Clear();
-            _sessionRateSamples.Clear();
-            _graphSmoothPrimed = false;
-            ClearMiniGraphPaths();
+            // Сброс табло — в OnMeasureAborted: замер мог запустить и трей.
+            MeasurementSession.Stop();
             return;
         }
 
@@ -504,22 +496,40 @@ public partial class MainWindow : INotifyPropertyChanged
         var s = SettingsStorage.Load();
         if (!s.SpeedTest.AutoStartWhenWindowOpen)
             return;
-        if (_speedTestCts != null)
+        if (MeasurementSession.IsRunning)
             return;
         _ = TryStartSpeedTestAsync(showMissingUrlMessage: false);
     }
 
-    private async Task TryStartSpeedTestAsync(bool showMissingUrlMessage)
+    /// <summary>Замер общий с треем (<see cref="MeasurementSession"/>); окно рисует его на циферблате.</summary>
+    private Task TryStartSpeedTestAsync(bool showMissingUrlMessage)
     {
-        var s = SettingsStorage.Load();
-        var fileUrlRaw = ((s.SpeedTest.UseCustomDownloadFileUrl ? s.SpeedTest.DownloadFileUrl : null) ?? SpeedTestConfig.DownloadFileUrl).Trim();
-        if (string.IsNullOrWhiteSpace(fileUrlRaw))
-        {
-            if (showMissingUrlMessage)
-                MessageBox.Show(LocalizationService.T("Tray.NoServerUrl"), LocalizationService.T("Common.AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        if (!MeasurementSession.Start() && showMissingUrlMessage)
+            MessageBox.Show(LocalizationService.T("Tray.NoServerUrl"), LocalizationService.T("Common.AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        return Task.CompletedTask;
+    }
 
+    private void SubscribeMeasurementSession()
+    {
+        MeasurementSession.Started += OnMeasureStarted;
+        MeasurementSession.WaitingForNetwork += EnterWaitingForNetworkUi;
+        MeasurementSession.Measuring += OnMeasureMeasuring;
+        MeasurementSession.Progress += ApplySpeedProgress;
+        MeasurementSession.Completed += OnMeasureCompleted;
+        MeasurementSession.Aborted += OnMeasureAborted;
+        Closed += (_, _) =>
+        {
+            MeasurementSession.Started -= OnMeasureStarted;
+            MeasurementSession.WaitingForNetwork -= EnterWaitingForNetworkUi;
+            MeasurementSession.Measuring -= OnMeasureMeasuring;
+            MeasurementSession.Progress -= ApplySpeedProgress;
+            MeasurementSession.Completed -= OnMeasureCompleted;
+            MeasurementSession.Aborted -= OnMeasureAborted;
+        };
+    }
+
+    private void OnMeasureStarted()
+    {
         StopMiniGraphFadeAndResetOpacity();
         _graphSamples.Clear();
         _sessionRateSamples.Clear();
@@ -529,83 +539,63 @@ public partial class MainWindow : INotifyPropertyChanged
         SpeedDial.SetValueSilent(0);
         ResetSessionSpeedStats();
         UpdateSpeedStatsLine();
-
         StartStopText = "Стоп";
-        _speedTestCts = new CancellationTokenSource();
-        var ct = _speedTestCts.Token;
+    }
 
-        try
-        {
-            var duration = TimeSpan.FromSeconds(Math.Clamp(s.SpeedTestDurationSeconds, 1, 600));
-            var dlBase = new Uri(fileUrlRaw, UriKind.Absolute);
-            await ConnectivityProbe.WaitUntilReachableAsync(
-                dlBase,
-                () => Dispatcher.Invoke(EnterWaitingForNetworkUi),
-                ct);
+    private void OnMeasureMeasuring(TimeSpan duration)
+    {
+        _measureDuration = duration;
+        _sessionWaitingForNetwork = false;
+        _sessionMeasuring = true;
+        UpdateSpeedStatsLine();
+        BeginDialProgressRing(duration);
+    }
 
-            _sessionWaitingForNetwork = false;
-            _sessionMeasuring = true;
-            UpdateSpeedStatsLine();
-            BeginDialProgressRing(duration);
-            var options = new SpeedTestOptions
-            {
-                Duration = duration,
-                ParallelStreams = 4,
-                ProgressInterval = TimeSpan.FromMilliseconds(50),
-                DownloadUrlBuilder = () => new Uri(dlBase + (dlBase.Query.Length > 0 ? "&" : "?") + "r=" + Guid.NewGuid().ToString("N"))
-            };
+    private void OnMeasureCompleted(SpeedTestResult result)
+    {
+        var avg = result.Download.AverageMbps;
+        CurrentMbps = avg;
+        var rFinal = (int)Math.Clamp(Math.Round(avg), 0, 999);
+        if (_lastDialSpeed < 0)
+            SpeedDial.SetValueSilent(rFinal);
+        else if (rFinal != _lastDialSpeed)
+            SpeedDial.AnimateToValue(rFinal, slideDown: rFinal < _lastDialSpeed);
+        _lastDialSpeed = rFinal;
 
-            var prog = new Progress<SpeedTestProgress>(p => Dispatcher.Invoke(() => ApplySpeedProgress(p)));
-            var result = await _speedTest.RunAsync(options, prog, ct);
+        _sessionAverageKnown = true;
+        _sessionAverageMbps = _sessionRateSamples.Count > 0
+            ? _sessionRateSamples.Average()
+            : avg;
+        UpdateSpeedStatsLine();
+        SpeedDial.SetResultHighlight(true);
+        BeginMiniGraphFadeOutAfterMeasurementComplete();
+        UpdateDialProgressRingFromElapsed(_measureDuration, _measureDuration, forceFull: true);
+        PlayMeasureCompleteGlow();
+        EndMeasureUi();
+    }
 
-            var avg = result.Download.AverageMbps;
-            CurrentMbps = avg;
-            var rFinal = (int)Math.Clamp(Math.Round(avg), 0, 999);
-            if (_lastDialSpeed < 0)
-                SpeedDial.SetValueSilent(rFinal);
-            else if (rFinal != _lastDialSpeed)
-                SpeedDial.AnimateToValue(rFinal, slideDown: rFinal < _lastDialSpeed);
-            _lastDialSpeed = rFinal;
+    /// <summary>Остановлен (кнопкой в окне или из трея) или упал — табло в ноль.</summary>
+    private void OnMeasureAborted()
+    {
+        ResetSessionSpeedStats();
+        ResetDialProgressRingAfterAbort();
+        CurrentMbps = 0;
+        SpeedDial.AnimateToValue(0, slideDown: true);
+        _lastDialSpeed = 0;
+        StopMiniGraphFadeAndResetOpacity();
+        _graphSamples.Clear();
+        _sessionRateSamples.Clear();
+        _graphSmoothPrimed = false;
+        ClearMiniGraphPaths();
+        EndMeasureUi();
+    }
 
-            _sessionAverageKnown = true;
-            _sessionAverageMbps = _sessionRateSamples.Count > 0
-                ? _sessionRateSamples.Average()
-                : avg;
-            UpdateSpeedStatsLine();
-            SpeedDial.SetResultHighlight(true);
-            BeginMiniGraphFadeOutAfterMeasurementComplete();
-            UpdateDialProgressRingFromElapsed(duration, duration, forceFull: true);
-            PlayMeasureCompleteGlow();
-        }
-        catch (OperationCanceledException)
-        {
-            ResetDialProgressRingAfterAbort();
-            StopMiniGraphFadeAndResetOpacity();
-            _graphSamples.Clear();
-            _sessionRateSamples.Clear();
-            _graphSmoothPrimed = false;
-            ClearMiniGraphPaths();
-            ResetSessionSpeedStats();
-        }
-        catch
-        {
-            ResetDialProgressRingAfterAbort();
-            StopMiniGraphFadeAndResetOpacity();
-            _graphSamples.Clear();
-            _sessionRateSamples.Clear();
-            _graphSmoothPrimed = false;
-            ClearMiniGraphPaths();
-            ResetSessionSpeedStats();
-        }
-        finally
-        {
-            StopDialRingSmoothingAfterMeasure();
-            _sessionWaitingForNetwork = false;
-            _sessionMeasuring = false;
-            _speedTestCts?.Dispose();
-            _speedTestCts = null;
-            StartStopText = "Старт";
-        }
+    private void EndMeasureUi()
+    {
+        StopDialRingSmoothingAfterMeasure();
+        _sessionWaitingForNetwork = false;
+        _sessionMeasuring = false;
+        StartStopText = "Старт";
     }
 
     private void ApplySpeedProgress(SpeedTestProgress p)

@@ -226,6 +226,18 @@
                                 <TextBlock TextWrapping="Wrap"
                                            Text="{DynamicResource Loc_SettingsWindow_CloseToTrayCross}"/>
                             </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Возможности: звук при появлении сети и страна в главном окне -->
+                    <Border Style="{StaticResource Rf.Settings.Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Rf.Settings.SectionTitle}" Text="{DynamicResource Loc_SettingsWindow_SectionFeatures}"/>
+                            <CheckBox x:Name="PlaySoundOnReconnectCheck"
+                                      Margin="0,0,0,4">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="{DynamicResource Loc_SettingsWindow_PlaySoundOnReconnect}"/>
+                            </CheckBox>
                             <CheckBox x:Name="ShowRegionInWindowCheck"
                                       Margin="0,4"
                                       Checked="RegionOptions_OnChanged"

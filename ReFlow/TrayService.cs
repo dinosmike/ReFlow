@@ -31,9 +31,6 @@ public sealed class TrayService : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly UiTheme _theme;
 
-    private readonly HttpClient _http = new();
-    private readonly SpeedTestService _speedTest;
-
     /// <summary>Вторая иконка — флаг страны внешнего IP; создаётся при первом включении в настройках.</summary>
     private NotifyIcon? _regionIcon;
     private TrayIconAnimator? _regionAnim;
@@ -42,14 +39,6 @@ public sealed class TrayService : IDisposable
     private bool _regionStarted;
 
     public RegionService Region => _region;
-
-    private CancellationTokenSource? _quickTestCts;
-
-    /// <summary>Поколение запуска быстрого теста — игнорировать колбэки от отменённой задачи.</summary>
-    private int _quickTestGeneration;
-
-    /// <summary>UI для этого поколения уже финализирован (зелёный/восстановление) — игнорировать поздние Rate из очереди Dispatcher.</summary>
-    private int _quickTestUiSealedGeneration;
 
     /// <summary>Последний успешный пик (макс. скорость по сэмплам, зелёный), держим до следующего клика / перезапуска.</summary>
     private string? _lastQuickTestPeakText;
@@ -60,7 +49,6 @@ public sealed class TrayService : IDisposable
     public TrayService(UiTheme theme)
     {
         _theme = theme;
-        _speedTest = new SpeedTestService(_http);
 
         var disp = Application.Current?.Dispatcher ?? throw new InvalidOperationException("Application.Current is null.");
         _dispatcher = disp;
@@ -98,6 +86,13 @@ public sealed class TrayService : IDisposable
         _region = new RegionService(disp);
         _region.CheckStarted += OnRegionCheckStarted;
         _region.CheckCompleted += OnRegionCheckCompleted;
+
+        MeasurementSession.Started += OnMeasureStarted;
+        MeasurementSession.WaitingForNetwork += OnMeasureWaiting;
+        MeasurementSession.Measuring += OnMeasureMeasuring;
+        MeasurementSession.Progress += OnMeasureProgress;
+        MeasurementSession.Completed += OnMeasureCompleted;
+        MeasurementSession.Aborted += OnMeasureAborted;
 
         SettingsStorage.Saved += OnSettingsSaved;
         ApplyRegionSettings(SettingsStorage.Load());
@@ -158,14 +153,10 @@ public sealed class TrayService : IDisposable
         menu.ResumeLayout();
     }
 
-    private bool IsQuickTestRunning() => _quickTestCts is { IsCancellationRequested: false };
+    private static bool IsQuickTestRunning() => MeasurementSession.IsRunning;
 
-    private void StopQuickTest()
-    {
-        try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
-
-        // Пункт меню обновится при следующем Opening.
-    }
+    // Пункт меню обновится при следующем Opening.
+    private static void StopQuickTest() => MeasurementSession.Stop();
 
     private void OnNotifyIconMouseUp(object? sender, MouseEventArgs e) => ScheduleSingleClickIfLeft(e);
 
@@ -298,9 +289,13 @@ public sealed class TrayService : IDisposable
     public void Dispose()
     {
         SettingsStorage.Saved -= OnSettingsSaved;
-        try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
-        _quickTestCts?.Dispose();
-        _http.Dispose();
+        MeasurementSession.Started -= OnMeasureStarted;
+        MeasurementSession.WaitingForNetwork -= OnMeasureWaiting;
+        MeasurementSession.Measuring -= OnMeasureMeasuring;
+        MeasurementSession.Progress -= OnMeasureProgress;
+        MeasurementSession.Completed -= OnMeasureCompleted;
+        MeasurementSession.Aborted -= OnMeasureAborted;
+        MeasurementSession.Stop();
 
         _singleClickTimer.Stop();
         _notifyIcon.Visible = false;
@@ -432,119 +427,51 @@ public sealed class TrayService : IDisposable
 
     // ---------- Быстрый замер ----------
 
+    /// <summary>Замер общий с окном (<see cref="MeasurementSession"/>); трей рисует его на иконке.</summary>
     private void StartQuickTest(bool restart)
     {
-        if (restart)
-        {
-            try { _quickTestCts?.Cancel(); } catch { /* ignore */ }
-        }
-
-        if (_quickTestCts is { IsCancellationRequested: false })
-            return;
-
-        var settings = SettingsStorage.Load();
-        var fileUrlRaw = ((settings.SpeedTest.UseCustomDownloadFileUrl ? settings.SpeedTest.DownloadFileUrl : null) ?? SpeedTestConfig.DownloadFileUrl).Trim();
-        if (string.IsNullOrWhiteSpace(fileUrlRaw))
-        {
+        if (!MeasurementSession.Start(restart))
             _notifyIcon.ShowBalloonTip(2500, "ReFlow", LocalizationService.T("Tray.NoServerUrl"), ToolTipIcon.Warning);
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _quickTestCts = cts;
-        var ct = cts.Token;
-        var gen = ++_quickTestGeneration;
-        var samples = new List<double>();
-
-        // Реакция на клик сразу, не дожидаясь первого пробника (он может висеть до таймаута).
-        InvokeOnUi(() => BlinkDash(ConnectivityProbe.IsNetworkLikelyDown ? Color.Red : Color.LimeGreen));
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var dlBase = new Uri(fileUrlRaw, UriKind.Absolute);
-
-                await ConnectivityProbe.WaitUntilReachableAsync(
-                    dlBase,
-                    () => InvokeOnUi(() =>
-                    {
-                        if (gen != _quickTestGeneration || _quickTestUiSealedGeneration == gen)
-                            return;
-                        BlinkDash(Color.Red);
-                        _notifyIcon.Text = LocalizationService.T("Tray.WaitingForNetwork");
-                    }),
-                    ct).ConfigureAwait(false);
-
-                InvokeOnUi(() =>
-                {
-                    if (gen != _quickTestGeneration || _quickTestUiSealedGeneration == gen)
-                        return;
-                    // Сервер доступен — до первых цифр мигает зелёная черточка.
-                    BlinkDash(Color.LimeGreen);
-                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-                });
-
-                var duration = TimeSpan.FromSeconds(Math.Clamp(settings.SpeedTestDurationSeconds, 1, 600));
-                var options = new SpeedTestOptions
-                {
-                    Duration = duration,
-                    ParallelStreams = 4,
-                    DownloadUrlBuilder = () => new Uri(dlBase + (dlBase.Query.Length > 0 ? "&" : "?") + "r=" + Guid.NewGuid().ToString("N"))
-                };
-
-                var prog = new Progress<SpeedTestProgress>(p =>
-                    InvokeOnUi(() => OnQuickTestProgress(gen, samples, p)));
-                var result = await _speedTest.RunAsync(options, prog, ct).ConfigureAwait(false);
-
-                InvokeOnUi(() =>
-                {
-                    if (gen != _quickTestGeneration)
-                        return;
-                    var peakMbps = samples.Count > 0 ? samples.Max() : result.Download.AverageMbps;
-                    _quickTestUiSealedGeneration = gen;
-                    ShowFinalMaxMbps(peakMbps);
-                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-                    FinalizeQuickTestIfCurrent(gen, cts);
-                });
-            }
-            catch (OperationCanceledException)
-            {
-                InvokeOnUi(() =>
-                {
-                    if (gen != _quickTestGeneration)
-                        return;
-                    _quickTestUiSealedGeneration = gen;
-                    RestoreLastQuickTestGlyphOrBase();
-                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-                    FinalizeQuickTestIfCurrent(gen, cts);
-                });
-            }
-            catch
-            {
-                InvokeOnUi(() =>
-                {
-                    if (gen != _quickTestGeneration)
-                        return;
-                    _quickTestUiSealedGeneration = gen;
-                    RestoreLastQuickTestGlyphOrBase();
-                    _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
-                    FinalizeQuickTestIfCurrent(gen, cts);
-                });
-                LogTrayException("QuickTest");
-            }
-        }, ct);
     }
 
-    private void FinalizeQuickTestIfCurrent(int gen, CancellationTokenSource cts)
-    {
-        if (gen != _quickTestGeneration)
-            return;
-        if (!ReferenceEquals(_quickTestCts, cts))
-            return;
+    private readonly List<double> _quickTestSamples = new();
+    private bool _quickTestMeasuring;
 
-        _quickTestCts = null;
-        try { cts.Dispose(); } catch { /* ignore */ }
+    private void OnMeasureStarted()
+    {
+        _quickTestSamples.Clear();
+        _quickTestMeasuring = false;
+        // Реакция на клик сразу, не дожидаясь первого пробника (он может висеть до таймаута).
+        BlinkDash(ConnectivityProbe.IsNetworkLikelyDown ? Color.Red : Color.LimeGreen);
+    }
+
+    private void OnMeasureWaiting()
+    {
+        BlinkDash(Color.Red);
+        _notifyIcon.Text = LocalizationService.T("Tray.WaitingForNetwork");
+    }
+
+    private void OnMeasureMeasuring(TimeSpan duration)
+    {
+        // Сервер доступен — до первых цифр мигает зелёная черточка.
+        _quickTestMeasuring = true;
+        BlinkDash(Color.LimeGreen);
+        _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
+    }
+
+    private void OnMeasureCompleted(SpeedTestResult result)
+    {
+        _quickTestMeasuring = false;
+        var peakMbps = _quickTestSamples.Count > 0 ? _quickTestSamples.Max() : result.Download.AverageMbps;
+        ShowFinalMaxMbps(peakMbps);
+        _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
+    }
+
+    private void OnMeasureAborted()
+    {
+        _quickTestMeasuring = false;
+        RestoreLastQuickTestGlyphOrBase();
+        _notifyIcon.Text = LocalizationService.T("Tray.BalloonTip");
     }
 
     private static void LogTrayException(string where)
@@ -564,16 +491,15 @@ public sealed class TrayService : IDisposable
         }
     }
 
-    private void OnQuickTestProgress(int gen, List<double> samples, SpeedTestProgress p)
+    private void OnMeasureProgress(SpeedTestProgress p)
     {
-        if (gen != _quickTestGeneration)
-            return;
-        if (_quickTestUiSealedGeneration == gen)
+        // Поздние тики после конца замера не должны перебить итоговую цифру.
+        if (!_quickTestMeasuring)
             return;
         if (p.Kind != SpeedTestProgressKind.Rate || p.Mbps is null)
             return;
 
-        samples.Add(p.Mbps.Value);
+        _quickTestSamples.Add(p.Mbps.Value);
         var text = Math.Round(p.Mbps.Value).ToString("0");
         // Цифры горят ровно, мигает только полоска по нижней кромке — «замер ещё идёт».
         _iconAnim.Blink(
