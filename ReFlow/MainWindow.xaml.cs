@@ -551,10 +551,10 @@ public partial class MainWindow : INotifyPropertyChanged
         UpdateDialServerTooltip();
     }
 
-    /// <summary>Правый клик по табло: выбрать сервер замера. Выбранный идёт первым; не отвечает — дальше по списку.</summary>
-    private void DialHost_OnContextMenuOpening(object sender, System.Windows.Controls.ContextMenuEventArgs e)
+    /// <summary>Правый клик в любом месте окна: выбрать сервер замера. Выбранный идёт первым; не отвечает — дальше по списку.</summary>
+    private void Window_OnContextMenuOpening(object sender, System.Windows.Controls.ContextMenuEventArgs e)
     {
-        var menu = DialHost.ContextMenu;
+        var menu = ((FrameworkElement)sender).ContextMenu;
         menu.Items.Clear();
         var settings = SettingsStorage.Load();
         var servers = MeasurementSession.GetServers(settings);

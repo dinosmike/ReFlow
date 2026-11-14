@@ -34,7 +34,11 @@
     <Border Background="{DynamicResource Rf.Window.Background}"
             BorderBrush="{DynamicResource Rf.Border}"
             BorderThickness="1"
-            ClipToBounds="False">
+            ClipToBounds="False"
+            ContextMenuOpening="Window_OnContextMenuOpening">
+        <Border.ContextMenu>
+            <ContextMenu/>
+        </Border.ContextMenu>
         <DockPanel>
             <!-- Заголовок: перетаскивание слева, три кнопки справа -->
             <Border DockPanel.Dock="Top"
@@ -166,11 +170,7 @@
                               Width="278"
                               Height="130"
                               HorizontalAlignment="Center"
-                              Background="Transparent"
-                              ContextMenuOpening="DialHost_OnContextMenuOpening">
-                            <Grid.ContextMenu>
-                                <ContextMenu/>
-                            </Grid.ContextMenu>
+                              Background="Transparent">
                             <controls:SpeedRollingDigits x:Name="SpeedDial"
                                                          HorizontalAlignment="Center"
                                                          VerticalAlignment="Center"/>

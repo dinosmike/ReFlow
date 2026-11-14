@@ -322,6 +322,10 @@ public partial class SettingsWindow
         InitializeComponent();
         TooltipDelayHelper.Apply(this, MainWindow.TooltipInitialShowDelayMs);
 
+        // Если высота экрана меньше контента (например, ноутбук 1368×766) — ограничиваем окно
+        // высотой рабочей области, внутри появляется полоса прокрутки вместо окна за краем экрана.
+        MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - 20);
+
         Loaded += OnLoaded;
         Deactivated += SettingsWindow_OnDeactivated;
         PreviewKeyDown += (_, e) =>

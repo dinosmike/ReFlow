@@ -177,11 +177,17 @@
             <!-- Контент -->
             <Grid Margin="16,12,16,0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0">
+                <!-- "*" выше вместо Auto — когда экрана не хватает (MaxHeight окна), здесь появляется полоса прокрутки. -->
+                <ScrollViewer Grid.Row="0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Margin="0,0,-10,0"
+                              Padding="0,0,10,0">
+                <StackPanel>
                     <!-- Язык: подпись и список в одну линию -->
                     <Border Style="{StaticResource Rf.Settings.Card}">
                         <Grid VerticalAlignment="Center">
@@ -550,6 +556,7 @@
                             </StackPanel>
                         </Border>
                 </StackPanel>
+                </ScrollViewer>
 
                 <!-- Нижняя панель (верхний отступ 0 — расстояние до последней карточки задаёт Margin карточки 12, как между блоками) -->
                 <Border Grid.Row="1"
