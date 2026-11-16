@@ -4,16 +4,14 @@
       "version": "1.4",
       "date": "2026-11-16",
       "ru": [
-        "Индикатор сервера замера справа от табло",
-        "Выбор сервера правым кликом в любом месте окна",
-        "Окно настроек помещается на небольших экранах",
-        "Обновление ставится при следующем запуске, без перезапуска программы"
+        "Индикатор сервера замера",
+        "Выбор сервера правым кликом",
+        "Окно настроек помещается всегда"
       ],
       "en": [
-        "Test server indicator to the right of the dial",
-        "Choose the server by right-clicking anywhere in the window",
-        "Settings window fits on small screens",
-        "Updates are installed on the next launch, without restarting the app"
+        "Test server indicator",
+        "Choose the server by right-clicking",
+        "Settings window always fits on screen"
       ]
     },
     {
