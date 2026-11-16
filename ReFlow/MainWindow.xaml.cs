@@ -558,10 +558,7 @@ public partial class MainWindow : INotifyPropertyChanged
         menu.Items.Clear();
         var settings = SettingsStorage.Load();
         var servers = MeasurementSession.GetServers(settings);
-        // Ничего не выбрано (или выбранного больше нет в списке) — отмечен первый, основной.
-        var preferred = servers.Any(f => string.Equals(f.Url, settings.SpeedTest.PreferredServerUrl, StringComparison.OrdinalIgnoreCase))
-            ? settings.SpeedTest.PreferredServerUrl
-            : servers.FirstOrDefault().Url;
+        var preferred = GetSelectedServerUrl(settings, servers);
 
         var fallback = new System.Windows.Controls.MenuItem
         {
@@ -581,6 +578,12 @@ public partial class MainWindow : INotifyPropertyChanged
             menu.Items.Add(ServerMenuItem(name, url, string.Equals(url, preferred, StringComparison.OrdinalIgnoreCase)));
     }
 
+    /// <summary>Сервер, выбранный в настройках, или первый по списку, если выбор не задан или пропал.</summary>
+    private static string GetSelectedServerUrl(AppSettings settings, List<(string Name, string Url)> servers) =>
+        servers.Any(f => string.Equals(f.Url, settings.SpeedTest.PreferredServerUrl, StringComparison.OrdinalIgnoreCase))
+            ? settings.SpeedTest.PreferredServerUrl!
+            : servers.FirstOrDefault().Url;
+
     private System.Windows.Controls.MenuItem ServerMenuItem(string header, string url, bool isChecked)
     {
         var item = new System.Windows.Controls.MenuItem { Header = header, IsChecked = isChecked };
@@ -595,13 +598,43 @@ public partial class MainWindow : INotifyPropertyChanged
         return item;
     }
 
-    /// <summary>Откуда идёт (или шёл последний) замер — только в подсказке циферблата, переключение серверов незаметное.</summary>
+    /// <summary>
+    /// Откуда идёт (или шёл последний) замер: подсказка на табло и постоянные полоски справа от него
+    /// (серые — остальные серверы, бирюзовая — текущий). Переключение серверов незаметное, это только индикация.
+    /// </summary>
     private void UpdateDialServerTooltip()
     {
-        var name = MeasurementSession.CurrentServerName;
-        DialHost.ToolTip = name == null
+        var settings = SettingsStorage.Load();
+        var servers = MeasurementSession.GetServers(settings);
+        // Во время замера — реальный сервер; до него (или если замера ещё не было) — выбранный в настройках.
+        var activeUrl = MeasurementSession.CurrentServerUrl ?? GetSelectedServerUrl(settings, servers);
+        var activeName = MeasurementSession.CurrentServerUrl != null
+            ? MeasurementSession.CurrentServerName
+            : servers.FirstOrDefault(f => string.Equals(f.Url, activeUrl, StringComparison.OrdinalIgnoreCase)).Name;
+
+        DialHost.ToolTip = activeName == null
             ? null
-            : string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.DialServer"), name);
+            : string.Format(CultureInfo.CurrentCulture, LocalizationService.T("MainWindow.DialServer"), activeName);
+
+        // Высота — табло за вычетом скруглённых уголков сверху и снизу, чтобы полоски не наезжали на скругление.
+        ServerTicksPanel.Height = DialHost.Height - 2 * DialCornerRadius;
+        ServerTicksPanel.RowDefinitions.Clear();
+        ServerTicksPanel.Children.Clear();
+        var accent = (System.Windows.Media.Brush)FindResource("Rf.Accent");
+        var muted = (System.Windows.Media.Brush)FindResource("Rf.Border");
+        for (var i = 0; i < servers.Count; i++)
+        {
+            ServerTicksPanel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition());
+            var tick = new System.Windows.Controls.Border
+            {
+                Width = 7,
+                Height = 1.5,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Background = string.Equals(servers[i].Url, activeUrl, StringComparison.OrdinalIgnoreCase) ? accent : muted,
+            };
+            System.Windows.Controls.Grid.SetRow(tick, i);
+            ServerTicksPanel.Children.Add(tick);
+        }
     }
 
     private void OnMeasureMeasuring(TimeSpan duration)

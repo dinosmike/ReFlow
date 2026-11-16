@@ -24,20 +24,14 @@ public static class ReUpdateConfig
     /// </summary>
     public static string UpdateAssetName => Path.GetFileNameWithoutExtension(AssetName) + "-update" + Path.GetExtension(AssetName);
 
-    /// <summary>Папка настроек в %LocalAppData% — там модуль хранит «что уже видели» и кэш changelog.</summary>
+    /// <summary>Папка настроек в %LocalAppData% — там модуль хранит «что уже видели».</summary>
     public static string AppDataFolderName { get; set; } = "";
-
-    /// <summary>Ветка, из которой берётся changelog.json.</summary>
-    public static string Branch { get; set; } = "main";
 
     /// <summary>Язык окна «Что нового»: «ru» или «en».</summary>
     public static Func<string> Language { get; set; } = () => "ru";
 
     /// <summary>Галочка «Проверять обновления».</summary>
     public static Func<bool> AutoUpdateEnabled { get; set; } = () => true;
-
-    /// <summary>Программа занята (например, идёт замер) — обновление подождёт.</summary>
-    public static Func<bool> IsBusy { get; set; } = () => false;
 
     /// <summary>Цвета окна «Что нового» — из темы программы.</summary>
     public static ReUpdateColors Colors { get; set; } = new();

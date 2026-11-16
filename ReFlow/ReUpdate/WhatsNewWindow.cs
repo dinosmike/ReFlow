@@ -24,7 +24,7 @@ public sealed class WhatsNewWindow : Window
     private readonly StackPanel _list = new();
     private readonly TextBlock _toggle = new();
     private readonly Version? _seenBefore;
-    private List<ChangelogVersion> _versions = new();
+    private readonly List<ChangelogVersion> _versions;
     private bool _showAll;
 
     private static string T(string ru, string en) => ReUpdateConfig.IsRussian ? ru : en;
@@ -112,12 +112,10 @@ public sealed class WhatsNewWindow : Window
         root.Children.Add(scroll);
         Content = root;
 
-        Loaded += async (_, _) =>
-        {
-            _versions = await Changelog.LoadAsync();
-            Render();
-            WhatsNewState.MarkSeen();
-        };
+        // История вшита в exe: окно появляется сразу готовым.
+        _versions = Changelog.Load();
+        Render();
+        Loaded += (_, _) => WhatsNewState.MarkSeen();
     }
 
     private void Render()

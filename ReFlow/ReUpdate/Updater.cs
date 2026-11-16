@@ -1,28 +1,16 @@
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
-using System.Windows.Threading;
 
 namespace ReUpdate;
 
 /// <summary>
-/// Тихое автообновление из релизов GitHub: скачать новый exe рядом, подменить себя
-/// (запущенный exe можно переименовать, но не перезаписать) и перезапуститься.
+/// Тихое автообновление из релизов GitHub. При запуске программы в фоне проверяет последний релиз;
+/// если он новее — скачивает exe и подменяет файл на диске. Запущенная программа работает дальше как была,
+/// новая версия запустится в следующий раз. Хитрость: запущенный exe нельзя перезаписать, но можно переименовать.
 /// </summary>
 public static class Updater
 {
-    /// <summary>Аргумент перезапуска после обновления: программа стартует тихо в трее.</summary>
-    public const string UpdatedArg = "--updated";
-
-    private static readonly TimeSpan FirstCheckDelay = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
-    /// <summary>Программа занята — обновление подождёт.</summary>
-    private static readonly TimeSpan BusyRetry = TimeSpan.FromMinutes(10);
-
-    private static DispatcherTimer? _timer;
-    private static bool _running;
-
     /// <summary>Путь к своему exe, только если это опубликованная одним файлом сборка (в отладке — null).</summary>
     private static string? ExePath
     {
@@ -42,34 +30,21 @@ public static class Updater
         var exe = ExePath;
         if (exe == null)
             return;
-        try { File.Delete(exe + ".old"); } catch { /* ещё занят — удалим в следующий раз */ }
+        try { File.Delete(exe + ".old"); } catch { /* ещё занят старой копией — удалим в следующий раз */ }
         try { File.Delete(exe + ".new"); } catch { /* ignore */ }
     }
 
-    public static void Start(Dispatcher dispatcher)
+    /// <summary>Один раз при запуске: проверить и, если есть, подготовить новую версию к следующему запуску.</summary>
+    public static void Start()
     {
-        if (ExePath == null)
+        if (ExePath == null || !ReUpdateConfig.AutoUpdateEnabled())
             return;
-        _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = FirstCheckDelay };
-        _timer.Tick += async (_, _) =>
-        {
-            _timer.Stop();
-            _timer.Interval = await CheckAndUpdateAsync() ? BusyRetry : CheckInterval;
-            _timer.Start();
-        };
-        _timer.Start();
+        _ = CheckAndDownloadAsync();
     }
 
-    /// <summary><c>true</c> — обновление есть, но отложено (программа занята); проверить снова пораньше.</summary>
-    private static async Task<bool> CheckAndUpdateAsync()
+    private static async Task CheckAndDownloadAsync()
     {
-        if (_running || !ReUpdateConfig.AutoUpdateEnabled())
-            return false;
-        var exe = ExePath;
-        if (exe == null)
-            return false;
-
-        _running = true;
+        var exe = ExePath!;
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
@@ -79,7 +54,7 @@ public static class Updater
             using var doc = JsonDocument.Parse(await http.GetStringAsync(api));
             var latest = VersionText.Parse(doc.RootElement.GetProperty("tag_name").GetString() ?? "");
             if (latest == null || latest <= ReUpdateConfig.CurrentVersion)
-                return false;
+                return;
 
             // Сначала отдельный файл для обновлений (его счётчик скачиваний = число обновлений), иначе обычный exe.
             string? url = null, fallbackUrl = null;
@@ -93,10 +68,7 @@ public static class Updater
             }
             url ??= fallbackUrl;
             if (url == null)
-                return false;
-
-            if (ReUpdateConfig.IsBusy())
-                return true;
+                return;
 
             var newPath = exe + ".new";
             await using (var src = await http.GetStreamAsync(url))
@@ -105,12 +77,10 @@ public static class Updater
             if (!LooksLikeExe(newPath))
             {
                 File.Delete(newPath);
-                return false;
+                return;
             }
 
-            if (ReUpdateConfig.IsBusy())
-                return true;
-
+            // Подмена: запущенный exe → .old (программа продолжает работать из него), новый → на его место.
             var oldPath = exe + ".old";
             if (File.Exists(oldPath))
                 File.Delete(oldPath);
@@ -124,18 +94,10 @@ public static class Updater
                 File.Move(oldPath, exe);
                 throw;
             }
-
-            Restart(exe);
-            return false;
         }
         catch
         {
-            // Нет сети, лимит GitHub, папка только для чтения — тихо пробуем в следующий раз.
-            return false;
-        }
-        finally
-        {
-            _running = false;
+            // Нет сети, лимит GitHub, папка только для чтения — тихо попробуем при следующем запуске.
         }
     }
 
@@ -146,23 +108,6 @@ public static class Updater
             return false;
         using var f = File.OpenRead(path);
         return f.ReadByte() == 'M' && f.ReadByte() == 'Z';
-    }
-
-    /// <summary>
-    /// Новый процесс стартует с паузой: пока старый не вышел, он держит мьютекс одного экземпляра
-    /// и новый просто активировал бы его окно.
-    /// </summary>
-    private static void Restart(string exe)
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = "cmd.exe",
-            Arguments = $"/c ping -n 4 127.0.0.1 >nul & start \"\" \"{exe}\" {UpdatedArg}",
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            WindowStyle = ProcessWindowStyle.Hidden,
-        });
-        System.Windows.Application.Current.Shutdown();
     }
 }
 

@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,66 +22,29 @@ internal sealed class ChangelogFile
     [JsonPropertyName("versions")] public List<ChangelogVersion> Versions { get; set; } = new();
 }
 
-/// <summary>
-/// История версий: свежая — с GitHub (raw changelog.json), без сети — последняя скачанная,
-/// а если её нет — копия, вшитая в exe при сборке.
-/// </summary>
+/// <summary>История версий — только из changelog.json, вшитого в exe при сборке. Из сети ничего не грузится.</summary>
 public static class Changelog
 {
-    private const string CacheFile = "changelog-cache.json";
-
-    public static async Task<List<ChangelogVersion>> LoadAsync()
+    public static List<ChangelogVersion> Load()
     {
-        var cachePath = Path.Combine(ReUpdateConfig.DataDir, CacheFile);
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-            var url = $"https://raw.githubusercontent.com/{ReUpdateConfig.Owner}/{ReUpdateConfig.Repo}/{ReUpdateConfig.Branch}/changelog.json";
-            var json = await http.GetStringAsync(url);
-            var fresh = Parse(json);
-            if (fresh.Count > 0)
-            {
-                try { await File.WriteAllTextAsync(cachePath, json); } catch { /* ignore */ }
-                return fresh;
-            }
+            var asm = Assembly.GetEntryAssembly();
+            var name = asm?.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("changelog.json", StringComparison.OrdinalIgnoreCase));
+            if (asm == null || name == null)
+                return new();
+            using var s = asm.GetManifestResourceStream(name)!;
+            using var r = new StreamReader(s);
+            var file = JsonSerializer.Deserialize<ChangelogFile>(r.ReadToEnd());
+            return (file?.Versions ?? new())
+                .Where(v => v.Parsed != null && v.Ru.Count + v.En.Count > 0)
+                .OrderByDescending(v => v.Parsed)
+                .ToList();
         }
         catch
         {
-            // Нет сети — ниже кэш или вшитая копия.
-        }
-
-        try
-        {
-            if (File.Exists(cachePath))
-            {
-                var cached = Parse(await File.ReadAllTextAsync(cachePath));
-                if (cached.Count > 0)
-                    return cached;
-            }
-        }
-        catch { /* ignore */ }
-
-        return LoadEmbedded();
-    }
-
-    private static List<ChangelogVersion> LoadEmbedded()
-    {
-        var asm = Assembly.GetEntryAssembly();
-        var name = asm?.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("changelog.json", StringComparison.OrdinalIgnoreCase));
-        if (asm == null || name == null)
             return new();
-        using var s = asm.GetManifestResourceStream(name)!;
-        using var r = new StreamReader(s);
-        return Parse(r.ReadToEnd());
-    }
-
-    private static List<ChangelogVersion> Parse(string json)
-    {
-        var file = JsonSerializer.Deserialize<ChangelogFile>(json);
-        return (file?.Versions ?? new())
-            .Where(v => v.Parsed != null && v.Ru.Count + v.En.Count > 0)
-            .OrderByDescending(v => v.Parsed)
-            .ToList();
+        }
     }
 }
 

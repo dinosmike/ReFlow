@@ -26,6 +26,9 @@ public static class MeasurementSession
 
     /// <summary>Название сервера, с которого идёт (или шёл последний) замер; null — сервер ещё не выбран.</summary>
     public static string? CurrentServerName { get; private set; }
+
+    /// <summary>URL того же сервера — для сравнения независимо от языка названия (например, для индикации в UI).</summary>
+    public static string? CurrentServerUrl { get; private set; }
     public static event Action<SpeedTestProgress>? Progress;
     public static event Action<SpeedTestResult>? Completed;
     /// <summary>Остановлен вручную или упал с ошибкой.</summary>
@@ -51,6 +54,7 @@ public static class MeasurementSession
         _cts = cts;
         var gen = ++_generation;
         CurrentServerName = null;
+        CurrentServerUrl = null;
         Started?.Invoke();
         // Выбранный вручную сервер первым, дальше остальные по порядку — если он не отвечает.
         var preferred = s.SpeedTest.PreferredServerUrl;
@@ -98,10 +102,11 @@ public static class MeasurementSession
                 () => OnUi(gen, () => { waited = true; WaitingForNetwork?.Invoke(); }),
                 ct).ConfigureAwait(false);
 
-            var serverName = servers.First(f => f.Url == dlBase).Name;
+            var server = servers.First(f => f.Url == dlBase);
             OnUi(gen, () =>
             {
-                CurrentServerName = serverName;
+                CurrentServerName = server.Name;
+                CurrentServerUrl = server.Url.ToString();
                 if (waited && SettingsStorage.Load().PlaySoundOnReconnect)
                     ReconnectChime.Play();
                 Measuring?.Invoke(duration);

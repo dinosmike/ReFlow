@@ -119,14 +119,10 @@ public partial class App : System.Windows.Application
         var startupSettings = SettingsStorage.Load();
         AutostartService.SetEnabled(startupSettings.AutostartEnabled);
 
-        // Перезапуск после автообновления — тихо в трее, без окна и без авто-замера.
-        var afterUpdate = false;
         foreach (var arg in e.Args)
         {
             if (string.Equals(arg, "--simulate-offline", StringComparison.OrdinalIgnoreCase))
                 ConnectivityProbe.SimulateOffline = true;
-            else if (string.Equals(arg, ReUpdate.Updater.UpdatedArg, StringComparison.OrdinalIgnoreCase))
-                afterUpdate = true;
         }
         // Модуль ReUpdate: автообновление с GitHub и «Что нового» (см. ReUpdate\КАК ПОДКЛЮЧИТЬ.md).
         ReUpdate.ReUpdateConfig.Owner = "dinosmike";
@@ -135,7 +131,6 @@ public partial class App : System.Windows.Application
         ReUpdate.ReUpdateConfig.AppDataFolderName = "ReFlow";
         ReUpdate.ReUpdateConfig.Language = () => LocalizationService.CurrentLanguageCode;
         ReUpdate.ReUpdateConfig.AutoUpdateEnabled = () => SettingsStorage.Load().AutoUpdate;
-        ReUpdate.ReUpdateConfig.IsBusy = () => MeasurementSession.IsRunning;
         ReUpdate.Updater.CleanupAfterUpdate();
         ReUpdate.WhatsNewState.Initialize();
 
@@ -155,15 +150,15 @@ public partial class App : System.Windows.Application
         MainWindow = main;
         main.Show();
 
-        if (!ConnectivityProbe.SimulateOffline && (startupSettings.MinimizeToTrayOnStartup || afterUpdate))
+        if (!ConnectivityProbe.SimulateOffline && startupSettings.MinimizeToTrayOnStartup)
             main.Hide();
 
         _tray = new TrayService(UiTheme.Dark);
         main.AttachRegion(_tray.Region);
-        if (!ConnectivityProbe.SimulateOffline && !afterUpdate)
+        if (!ConnectivityProbe.SimulateOffline)
             _tray.TryAutoStartOnTrayLaunchIfNeeded(startupSettings);
         LocalizationService.LanguageChanged += OnLocalizationLanguageChanged;
-        ReUpdate.Updater.Start(Dispatcher);
+        ReUpdate.Updater.Start();
     }
 
     private void OnLocalizationLanguageChanged() => _tray?.RefreshTexts();

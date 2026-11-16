@@ -165,11 +165,11 @@
                                        VerticalAlignment="Center"
                                        Margin="6,0,0,0"/>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <!-- Габариты и CornerRadius как у SpeedRollingDigits: контур прогресса совпадает с рамкой циферблата. -->
                         <Grid x:Name="DialHost"
                               Width="278"
                               Height="130"
-                              HorizontalAlignment="Center"
                               Background="Transparent">
                             <controls:SpeedRollingDigits x:Name="SpeedDial"
                                                          HorizontalAlignment="Center"
@@ -214,6 +214,15 @@
                                   Visibility="Collapsed"
                                   IsHitTestVisible="False"/>
                         </Grid>
+                        <!--
+                          Постоянная индикация сервера замера: тонкие серые полоски, активная — бирюзовая.
+                          Высота задаётся в коде (габарит табло за вычетом скруглённых уголков), строки и
+                          полоски наполняются там же — равномерно на всю эту высоту, сколько бы ни было серверов.
+                        -->
+                        <Grid x:Name="ServerTicksPanel"
+                              VerticalAlignment="Center"
+                              Margin="10,0,0,0"/>
+                        </StackPanel>
                         <TextBlock x:Name="SpeedStatsLine"
                                    FontSize="12"
                                    Foreground="{DynamicResource Rf.Text.Primary}"
